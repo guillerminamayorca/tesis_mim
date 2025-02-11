@@ -40,7 +40,6 @@ pases = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 
 #localidades = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/1.localidades.csv', low_memory = False, delimiter = ';')
 #provincias = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/1.provincias.csv', low_memory = False, delimiter = ';')
 
-
 '''
 ###########################################################################
                                 FUNCIONES
@@ -277,7 +276,7 @@ matricula_p.loc[matricula_p['documento'] == 96138637, '23_repite'] = 0
 matricula_p = matricula_p.drop(columns=['23_anio','22_anio','24_anio'])
 
 #añado info de cambio de escuela
-matricula_p['24_mantiene_cue'] = (matricula_p['23_cueanexo'] == matricula_p['24_cueanexo']).astype(int)
+#matricula_p['24_mantiene_cue'] = (matricula_p['23_cueanexo'] == matricula_p['24_cueanexo']).astype(int)
 
 
 matricula_p.to_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.matricula_pivotada.csv',index=False)
@@ -298,13 +297,14 @@ matricula_modelo = matricula_p.copy()
 
 #las saco del primer modelo
 col_drop = ['22_dependencia_funcional','22_modalidad','23_modalidad','24_modalidad',
-            '22_calle','23_calle','24_calle','22_altura','23_altura','24_altura','22_latitud',
-            '23_latitud','24_latitud','22_longitud','23_longitud','24_longitud']
+            '22_calle','23_calle','24_calle','22_altura','23_altura','24_altura'
+            #,'22_latitud','23_latitud','24_latitud','22_longitud','23_longitud','24_longitud'
+            ]
 matricula_modelo = matricula_modelo.drop(columns = col_drop)
 
 #las paso a numericas
 col_num = ['22_repite','23_repite','24_repite','22_sobreedad','23_sobreedad',
-           '24_sobreedad','24_mantiene_cue','22_capacidad_maxima','23_capacidad_maxima',
+           '24_sobreedad','22_capacidad_maxima','23_capacidad_maxima',#'24_mantiene_cue'
            '24_capacidad_maxima']
 matricula_modelo[col_num] = matricula_modelo[col_num].apply(pd.to_numeric, errors='coerce')
 
@@ -319,8 +319,8 @@ plt.show()
 
 matricula_modelo['23_dependencia_funcional'].unique()
 matricula_modelo['24_dependencia_funcional'].unique()
-matricula_modelo['23_dependencia_funcional'] = matricula_modelo['23_dependencia_funcional'].str.replace('Dirección de Escuelas', '').str.replace('Dirección de Educación', '')
-matricula_modelo['24_dependencia_funcional'] = matricula_modelo['24_dependencia_funcional'].str.replace('Dirección de Escuelas', '').str.replace('Dirección de Educación', '')
+matricula_modelo['23_dependencia_funcional'] = matricula_modelo['23_dependencia_funcional'].str.replace('Dirección de Escuelas ', '').str.replace('Dirección de Educación ', '')
+matricula_modelo['24_dependencia_funcional'] = matricula_modelo['24_dependencia_funcional'].str.replace('Dirección de Escuelas ', '').str.replace('Dirección de Educación ', '')
 
 col_ohe = ['22_turno', '23_turno', '24_turno','22_jornada','23_jornada','24_jornada',
            '22_cueanexo','23_cueanexo','24_cueanexo','23_dependencia_funcional','24_dependencia_funcional',
@@ -384,8 +384,8 @@ shap.dependence_plot("22_distrito_escolar_6.0", shap_values.values, X_test)
 print(classification_report(y_test, y_pred))  # Para obtener precisión, recall, f1-score
 print(f"AUC: {roc_auc_score(y_test, model.predict_proba(X_test)[:, 1]):.4f}")
 
+'''
 ## corro el XGBOOST de vuelta pero con las variables de interacción
-
 X_train2 = X_train.copy()
 X_test2 = X_test.copy()
 # Crear nuevas variables de interacción en X_train2 y X_test2
@@ -477,7 +477,7 @@ tabla = ax.table(cellText=coef_df.values,
                 colLoc='center',
                 colColours=['#f1f1f1'] * len(coef_df.columns))
 plt.title(f"Coeficientes y Significancia - Caso Base: {caso_base}", fontsize=14)
-
+'''
 
 
 #############################################################################
@@ -569,19 +569,6 @@ for col, keywords in map_vinculo.items():
 ####################################
 
 matricula_m2 = matricula_modelo_ohe.copy()
-#meto las variables de interaccion al df pr poder pegarle pps y dividir en
-#x,y, etc
-interactions = [
-    ("23_capacidad_maxima", "23_turno_Tarde"),
-    ("22_capacidad_maxima", "22_distrito_escolar_6.0"),
-    ("23_distrito_escolar_6.0", "22_jornada_Extendida"),
-    ("22_turno_Tarde", "23_distrito_escolar_10.0"),
-    ("22_distrito_escolar_6.0", "23_turno_Mañana")
-]
-
-# Crear las nuevas columnas en el df del modelo
-for col1, col2 in interactions:
-    matricula_m2[f"inter_{col1}_{col2}"] = matricula_m2[col1] * matricula_m2[col2]
 
 #le agrego la info de pps sacando la col de trayectoria_requirio xq no la proc
 #y la de vinculo_adulto porque le hice OHE
@@ -617,6 +604,9 @@ predicciones_m2 = model_m2.predict(X_test_m2)
 #var imp
 importance_m2 = model_m2.get_booster().get_score(importance_type='weight')
 sorted_importance_m2 = sorted(importance_m2.items(), key=lambda x: x[1], reverse=True)
+#analisis de las predicciones
+print(classification_report(y_test_m2, y_pred_m2))  # Para obtener precisión, recall, f1-score
+print(f"AUC: {roc_auc_score(y_test_m2, model_m2.predict_proba(X_test_m2)[:, 1]):.4f}")
 
 #graficos
 explainer_m2 = shap.Explainer(model_m2, X_train_m2)
@@ -635,20 +625,31 @@ shap.dependence_plot("actitud_puedeOrganizarse", shap_values_m2.values, X_test_m
 shap.dependence_plot("23_capacidad_maxima", shap_values_m2.values, X_test_m2)
 shap.dependence_plot("22_capacidad_maxima", shap_values_m2.values, X_test_m2)
 
-##como se elaporte porcentual de cad auna de las variables 
+##grafico simil shap pero con el impacto en el % de proba de rep de cada var 
 
-var_name = "actitud_cumple"
-shap_contribs = shap_values_m2.values[:, X_test_m2.columns.get_loc(var_name)]
-# Predicción sin la variable
-logit_without_var = expected_value_m2 + shap_values_m2.values.sum(axis=1) - shap_contribs
-# Convertimos a probabilidades
-prob_without_var = 1 / (1 + np.exp(-logit_without_var))
-prob_full = 1 / (1 + np.exp(-(expected_value_m2 + shap_values_m2.values.sum(axis=1))))
-# Diferencia promedio de probabilidad
-delta_prob_avg = (prob_full - prob_without_var).mean()
+impacto_prob_1 = np.mean(shap_values_m2.values, axis=0)  # Promedio del impacto en la probabilidad
 
-print(f"Impacto promedio de '{var_name}' en la probabilidad: {delta_prob_avg:.4f}")
+#Seleccionamos las variables con mayor impacto
+top_impact_pos = pd.DataFrame({'Variable': X_test_m2.columns, 'Impacto en Probabilidad': impacto_prob_1})
+top_impact_pos = top_impact_pos.sort_values(by='Impacto en Probabilidad', ascending=False).head(10)
+top_impact_neg = pd.DataFrame({'Variable': X_test_m2.columns, 'Impacto en Probabilidad': impacto_prob_1})
+top_impact_neg = top_impact_neg.sort_values(by='Impacto en Probabilidad', ascending=True).head(10)
 
+#grfico conjunto
+fig, axes = plt.subplots(1, 2, figsize=(14, 8))
+axes[0].barh(top_impact_pos['Variable'], top_impact_pos['Impacto en Probabilidad'] * 100, color='green')
+axes[0].set_title("Top 10 variables que aumentan la probabilidad de 24_repite = 1")
+axes[0].set_xlabel("Cambio Promedio en Probabilidad (%)")
+axes[0].axvline(0, color='black', linestyle='dashed')
+axes[0].invert_yaxis()
+axes[1].barh(top_impact_neg['Variable'], top_impact_neg['Impacto en Probabilidad'] * 100, color='red')
+axes[1].set_title("Top 10 variables que reducen la probabilidad de 24_repite = 1")
+axes[1].set_xlabel("Cambio Promedio en Probabilidad (%)")
+axes[1].axvline(0, color='black', linestyle='dashed')
+axes[1].invert_yaxis()
+
+plt.tight_layout()
+plt.show()
 
 #############################################################################
 ###################   PROCESAMIENTO DE PASES  ###########################
@@ -701,32 +702,53 @@ valores_unicos_s = {col: aux_s[col].unique() for col in aux_s.columns}
 
 
 #notas a conciliar
-'''
--
-Bueno (B)
-Regular (R)
-Muy Bueno (MB)
-Sobresaliente (S)
-Promoción acompañada
-Insuficiente (I)
-Suficiente
-Avanzado
-En Proceso
-no corresponde
-'''
+escala = {
+    "bueno (b)": 8,"regular (r)": 7, 
+    "muy bueno (mb)": 9,"sobresaliente (s)": 10,
+    "promoción acompañada": 5,"insuficiente (i)": 5, 
+    "suficiente": 7.5,"avanzado": 9.5,
+    "en proceso": 5,"no corresponde": np.nan,
+    "-":np.nan # Usamos NaN en vez de "NaN"
+}
+
+# Normalizar el texto (convertir a minúsculas y quitar espacios extras)
+columnas_notas = ['a_n1_mate', 'a_n2_mate', 'a_n3_mate', 'a_n4_mate', 
+                  'a_n1_lengua', 'a_n2_lengua', 'a_n3_lengua', 'a_n4_lengua']
+for col in columnas_notas:
+    notas[col] = notas[col].astype(str).str.strip().str.lower()  # Limpieza de texto
+    notas[col] = notas[col].replace(escala)  # Reemplazo según el diccionario
+    notas[col] = notas[col].apply(lambda x: int(x) if isinstance(x, str) and x.isdigit() else x)  # Conversión de números en texto
 
 
 #############################################################################
 ################    PROCESAMIENTO DE RESPONSABLES       #####################
 #############################################################################
 
+responsables['nac_resp'].unique()
+responsables['nivel_educativo'].unique()
+
+#nivel educativo
+nivel_educativo = {'sin estudios':0, 'primario incompleto':1,
+                   'primario completo':2, 'secundario incompleto':3,
+                   'secundario completo':4, 'terciario incompleto':5, 
+                   'terciario completo':6, 'universitario incompleto':7,
+                   'universitario completo':8,'posgrado':9}
+responsables['nivel_educativo'] = responsables['nivel_educativo'].str.strip().str.lower().replace(nivel_educativo)
+
+#nacionalidad de los responsables
+responsables['nac_resp'] = (responsables['nac_resp'].str.lower().apply(unidecode).apply(lambda x: re.sub(r'\s*\(.*?\)', '', x)))
+responsables = pd.get_dummies(responsables, columns=['nac_resp'], prefix='nac_resp_')
+responsables[responsables.filter(regex='^nac_resp_').columns] = responsables.filter(regex='^nac_resp_').astype(int)
+
+#vinculo de los responsables
+responsables['vinculo'] = (responsables['vinculo'].str.lower().apply(unidecode).apply(lambda x: re.sub(r'\s*\(.*?\)', '', x)))
+responsables = pd.get_dummies(responsables, columns=['vinculo'], prefix='vinculo_')
+responsables[responsables.filter(regex='^vinculo_').columns] = responsables.filter(regex='^vinculo_').astype(int)
 
 
 #############################################################################
-###################   PROCESAMIENTO DE DATOS PERSONALES  ########################
+###################     PROCESAMIENTO DE DOMICILIO   ########################
 #############################################################################
-
-#############                  DIM DOMICILIO                  ############
 
 dd = dd.sort_values(by=['documento', 'domicilio_renaper', 'mas_reciente'], ascending=[True, False, True])
 dd = dd.groupby('documento').first().reset_index()
@@ -744,8 +766,9 @@ dd[['latitud', 'longitud']] = dd.apply(obtener_coordenadas, axis=1)
 
 
 
-
-#############                  DIM SOCIOECONOMICO                  ############
+#############################################################################
+#################   PROCESAMIENTO DE SOCIOECONOMICO   #######################
+#############################################################################
 
 dse = dse.sort_values(by=['documento', 'flag_renaper'], ascending=[True, False])
 
@@ -779,7 +802,9 @@ for condicion in condiciones[1:]:
 filtro_final.sum()
 # 10841 tienen registros no nulos y mayores a 0 para algunos de los pares
 
-#############                  DATOS PERSONALES FULL              ############
+#############################################################################
+###############     PROCESAMIENTO DE DATOS PERSONALES   #####################
+#############################################################################
 
 # CHEQUEAR SI ACA YA TENGO UNA SOLA FILA PARA CADA PERSONA Y PUEDO MERGEAR X DOC
 #O TENGO QUE MERGEAR X DOC + FLAG_RENAPER
@@ -884,7 +909,7 @@ localidades = doc['localidad'].unique()
 cps = pd.merge(localidades,provincias,left_on='idProvincia',right_on='id', how='left')
 cps = cps[['localidad', 'provincia', 'cp']]
 cps['cp'] = cps['cp'].astype(str)
-cps['localidad'] = cps['localidad'].str.replace(r'\s*\(.*?\)\s*', '', regex=True)
+cps['localidad'] = cps['localidad'].str.replace(r'\s*\(.?\)\s', '', regex=True)
 cps = cps.sort_values(by='cp', ascending=True)
 
 #hago string este campo y no integer el otro porque corro riesgo de fabricar
@@ -1137,6 +1162,3 @@ for label in unique_labels:
 bbdd_clean['a_sistema_salud'].unique()
 #['Hospital público', nan, '-1', 'Obra social', 'Pre-paga']
 bbdd_clean['a_sistema_salud'].value_counts(dropna=False)
-
-
-
