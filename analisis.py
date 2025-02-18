@@ -22,7 +22,8 @@ import statsmodels.api as sm
 import seaborn as sns
 import shap
 from statsmodels.stats.outliers_influence import variance_inflation_factor
-from sklearn.metrics import classification_report, roc_auc_score
+from sklearn.metrics import classification_report, roc_auc_score, confusion_matrix
+from sklearn.model_selection import RandomizedSearchCV
 
 
 
@@ -288,9 +289,6 @@ plt.figure(figsize=(30, 20))
 sns.heatmap(corr_matrix, annot=True, cmap='coolwarm')
 plt.show()
 
-'''#######################################################################'''
-'''                PROCESAMIENTO PARA METER EN EL MODELO                  '''
-'''#######################################################################'''
 
 matricula_p = matricula_p[matricula_p['22_turno'].notnull()]
 matricula_modelo = matricula_p.copy()
@@ -366,6 +364,7 @@ y_pred = model.predict(X_test)
 residuals = y_test - y_pred  # Residuales -- 64
 accuracy = accuracy_score(y_test, y_pred) #0.9978165938864629
 print(f"Accuracy: {accuracy:.4f}")
+print(f"AUC ROC sobre train: {roc_auc_score(y_train, model.predict_proba(X_train)[:, 1]):.4f}")
 #prediccion
 predicciones = model.predict(X_test)
 #graficos
@@ -384,100 +383,65 @@ shap.dependence_plot("22_distrito_escolar_6.0", shap_values.values, X_test)
 print(classification_report(y_test, y_pred))  # Para obtener precisión, recall, f1-score
 print(f"AUC: {roc_auc_score(y_test, model.predict_proba(X_test)[:, 1]):.4f}")
 
-'''
-## corro el XGBOOST de vuelta pero con las variables de interacción
-X_train2 = X_train.copy()
-X_test2 = X_test.copy()
-# Crear nuevas variables de interacción en X_train2 y X_test2
-X_train2["inter_23_capacidad_maxima_23_turno_tarde"] = X_train2["23_capacidad_maxima"] * X_train2["23_turno_Tarde"]
-X_train2["inter_22_capacidad_maxima_22_distrito_escolar_6"] = X_train2["22_capacidad_maxima"] * X_train2["22_distrito_escolar_6.0"]
-X_train2["inter_23_distrito_escolar_6_22_jornada_extendida"] = X_train2["23_distrito_escolar_6.0"] * X_train2["22_jornada_Extendida"]
-X_train2["inter_22_turno_tarde_23_distrito_escolar_10"] = X_train2["22_turno_Tarde"] * X_train2["23_distrito_escolar_10.0"]
-X_train2["inter_22_distrito_escolar_6_23_turno_mañana"] = X_train2["22_distrito_escolar_6.0"] * X_train2["23_turno_Mañana"]
-X_test2["inter_23_capacidad_maxima_23_turno_tarde"] = X_test2["23_capacidad_maxima"] * X_test2["23_turno_Tarde"]
-X_test2["inter_22_capacidad_maxima_22_distrito_escolar_6"] = X_test2["22_capacidad_maxima"] * X_test2["22_distrito_escolar_6.0"]
-X_test2["inter_23_distrito_escolar_6_22_jornada_extendida"] = X_test2["23_distrito_escolar_6.0"] * X_test2["22_jornada_Extendida"]
-X_test2["inter_22_turno_tarde_23_distrito_escolar_10"] = X_test2["22_turno_Tarde"] * X_test2["23_distrito_escolar_10.0"]
-X_test2["inter_22_distrito_escolar_6_23_turno_mañana"] = X_test2["22_distrito_escolar_6.0"] * X_test2["23_turno_Mañana"]
+##### MISMO PERO CON UN RANDOMSEARCH
 
-#modelo
-#model2 = xgb.XGBClassifier(objective='binary:logistic', eval_metric='auc', use_label_encoder=False)
-model2 = xgb.XGBClassifier(
+param_dist = {
+    'n_estimators': [100, 300, 500, 700],  # Número de árboles
+    'learning_rate': [0.01, 0.05, 0.1, 0.2],  # Tasa de aprendizaje
+    'max_depth': [4, 6, 8, 10],  # Profundidad máxima de los árboles
+    'colsample_bytree': [0.7, 0.8, 0.9],  # Fracción de características por árbol
+    'subsample': [0.7, 0.8, 0.9],  # Fracción de muestras por árbol
+    #'scale_pos_weight': [1, 2, 3, 5],  # Ajuste del peso para la clase minoritaria
+    'gamma': [0, 1, 3, 5],  # Regularización para evitar sobreajuste
+    'max_delta_step': [0, 1, 5],  # Paso máximo para mejorar la estabilidad
+    'min_child_weight': [1, 5, 10],  # Peso mínimo de las instancias en una hoja
+    }
+
+model_rs = xgb.XGBClassifier(
     objective='binary:logistic',
     eval_metric='auc',
     use_label_encoder=False,
-    n_estimators=500,  # Aumentar el número de árboles
-    learning_rate=0.05,  # Reducir la tasa de aprendizaje para evitar overfitting
-    max_depth=6,  # Controla la profundidad de los árboles
-    colsample_bytree=0.8,  # Para usar una fracción de las features en cada árbol
-    subsample=0.8,  # Para usar una fracción de los datos en cada iteración
-    random_state=42
-)
-model2.fit(X_train2, y_train)
-y_pred2 = model2.predict(X_test2)
-accuracy2 = accuracy_score(y_test, y_pred2)
-print(f"New Accuracy with interactions: {accuracy2:.4f}")
-#prediccion
-predicciones2 = model2.predict(X_test2)
-#graficos
-explainer2 = shap.Explainer(model2, X_train2)
-shap_values2 = explainer2(X_test2)
-shap.summary_plot(shap_values2, X_test2)
-shap.summary_plot(shap_values2, X_test2, plot_type="bar")
+    random_state=42,
+    scale_pos_weight= len(y_train[y_train == 0]) / len(y_train[y_train == 1])  # Incluir scale_pos_weight aquí
+    )
+
+random_search = RandomizedSearchCV(
+    estimator=model_rs,
+    param_distributions=param_dist,  # Espacio de parámetros para la búsqueda aleatoria
+    n_iter=100,  # Número de combinaciones aleatorias que se probarán
+    scoring='roc_auc',  # Queremos maximizar AUC
+    cv=3,  # Validación cruzada con 3 particiones
+    verbose=1,  # Muestra el progreso
+    random_state=42,
+    n_jobs=-1  # Usamos todos los núcleos de la CPU
+    )
+
+#fiteo del modelo
+random_search.fit(X_train, y_train)
+print("Mejores parámetros:", random_search.best_params_)
+print("Mejor AUC:", random_search.best_score_)
+print(f"AUC ROC sobre train: {roc_auc_score(y_train, random_search.predict_proba(X_train)[:, 1]):.4f}")
+best_model = random_search.best_estimator_
+
+# Predicción
+y_pred = best_model.predict(X_test)
+
+explainer_1rs = shap.Explainer(best_model, X_train)
+shap_values_1rs = explainer_1rs(X_test)
+shap.summary_plot(shap_values_1rs, X_test)
+shap.summary_plot(shap_values_1rs, X_test, plot_type="bar")
+#veo con que variables interactúan las top5 features // 23_capacidad_maxima
+# 22_capacidad_maxima y 23_distrito_escolar_6
+shap.dependence_plot("23_capacidad_maxima", shap_values_1rs.values, X_test)
+shap.dependence_plot("22_capacidad_maxima", shap_values_1rs.values, X_test)
+shap.dependence_plot("23_distrito_escolar_6.0", shap_values_1rs.values, X_test)
+shap.dependence_plot("22_turno_Tarde", shap_values_1rs.values, X_test)
+shap.dependence_plot("22_distrito_escolar_6.0", shap_values_1rs.values, X_test)
+# Métricas
+print(classification_report(y_test, y_pred))
+print(f"AUC: {roc_auc_score(y_test, best_model.predict_proba(X_test)[:, 1]):.4f}")
 
 
-# regresion logistica comun
-
-# sacar cols con baja varianza
-low_variance_features = [col for col in X_train.columns if np.var(X_train[col]) < 1e-6]
-X_train = X_train.drop(columns=low_variance_features)
-#hay variables con mucha correlación y creo que podrían ser las de cueanexo
-columnas_a_eliminar = [col for col in X_train.columns if col.startswith(("22_cueanexo", "23_cueanexo", "24_cueanexo",
-                                                                         "22_barrio","23_barrio","24_barrio",
-                                                                         "22_comuna","23_comuna","24_comuna",
-                                                                         "24_","22_turno_Doble","23_sobreedad"))]
-X_train = X_train.drop(columns=columnas_a_eliminar)
-#ver variables con multicolinealidad que pueden estar rompiendo el modelo
-vif_data = pd.DataFrame()
-vif_data["Variable"] = X_train.columns
-vif_data["VIF"] = [variance_inflation_factor(X_train.values, i) for i in range(X_train.shape[1])]
-
-correlation_matrix = X_train.corr()
-plt.figure(figsize=(60, 40))
-sns.heatmap(correlation_matrix, annot=True, cmap="coolwarm", fmt='.2f')
-plt.show()
-
-#sin estas variables no me tira problemas de correlacion,
-#creo que el problema estaba en la corr entre cue comuna y barrio
-#si lo dejamos a nivel barrio funciona
-
-scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-logit_model = LogisticRegression(penalty='l1', solver='liblinear', C=1.0, max_iter=10000)
-logit_model.fit(X_train_scaled, y_train)
-X_train_const = sm.add_constant(X_train_scaled)
-logit_sm = sm.Logit(y_train, X_train_const)
-result = logit_sm.fit()
-
-#analisis del modelo
-variables = X_train.columns
-variables = ['const'] + list(variables)
-summary = result.summary2().tables[1]  # Tabla de coeficientes y p-valores
-summary.index = variables  # Asignar los nombres de las variables al índice
-summary = summary.sort_values(by='P>|z|', ascending=True)
-coef_df = summary[['Coef.', 'Std.Err.', 'z', 'P>|z|']]
-caso_base = summary.loc['const']  # Valor de la constante
-fig, ax = plt.subplots(figsize=(8, 6))  # Tamaño del gráfico
-ax.axis('off')
-tabla = ax.table(cellText=coef_df.values,
-                colLabels=coef_df.columns,
-                rowLabels=coef_df.index,
-                loc='center', 
-                cellLoc='center', 
-                colLoc='center',
-                colColours=['#f1f1f1'] * len(coef_df.columns))
-plt.title(f"Coeficientes y Significancia - Caso Base: {caso_base}", fontsize=14)
-'''
 
 
 #############################################################################
@@ -504,9 +468,6 @@ col_texto = ['actitud_observaciones','convivencia_observaciones','trayectoria_de
 
 pps = pps.drop(columns=col_texto)
 
-'''#######################################################################'''
-'''                PROCESAMIENTO PARA METER EN EL MODELO                  '''
-'''#######################################################################'''
 
 valores_unicos_dict = {col: pps[col].unique().tolist() for col in pps.columns}
 
@@ -598,7 +559,8 @@ model_m2 = xgb.XGBClassifier(
 model_m2.fit(X_train_m2, y_train_m2)
 y_pred_m2 = model_m2.predict(X_test_m2)
 accuracy_m2 = accuracy_score(y_test_m2, y_pred_m2)
-print(f"New Accuracy: {accuracy_m2:.4f}")
+print(f"AUC sobre el train: {accuracy_m2:.4f}")
+print(f"AUC ROC sobre train: {roc_auc_score(y_train_m2, model_m2.predict_proba(X_train_m2)[:, 1]):.4f}")
 #prediccion
 predicciones_m2 = model_m2.predict(X_test_m2)
 #var imp
@@ -606,7 +568,7 @@ importance_m2 = model_m2.get_booster().get_score(importance_type='weight')
 sorted_importance_m2 = sorted(importance_m2.items(), key=lambda x: x[1], reverse=True)
 #analisis de las predicciones
 print(classification_report(y_test_m2, y_pred_m2))  # Para obtener precisión, recall, f1-score
-print(f"AUC: {roc_auc_score(y_test_m2, model_m2.predict_proba(X_test_m2)[:, 1]):.4f}")
+print(f"AUC ROC sobre test: {roc_auc_score(y_test_m2, model_m2.predict_proba(X_test_m2)[:, 1]):.4f}")
 
 #graficos
 explainer_m2 = shap.Explainer(model_m2, X_train_m2)
@@ -621,35 +583,74 @@ shap.summary_plot(shap_values_m2, X_test_m2, plot_type="bar")
 #significativas y si es que cambia la interaccion de las top5 de antes
 shap.dependence_plot("actitud_cumple", shap_values_m2.values, X_test_m2)
 shap.dependence_plot("actitud_consulta", shap_values_m2.values, X_test_m2)
-shap.dependence_plot("actitud_puedeOrganizarse", shap_values_m2.values, X_test_m2)
+shap.dependence_plot("actitud_manifiesta", shap_values_m2.values, X_test_m2)
 shap.dependence_plot("23_capacidad_maxima", shap_values_m2.values, X_test_m2)
 shap.dependence_plot("22_capacidad_maxima", shap_values_m2.values, X_test_m2)
 
-##grafico simil shap pero con el impacto en el % de proba de rep de cada var 
 
-impacto_prob_1 = np.mean(shap_values_m2.values, axis=0)  # Promedio del impacto en la probabilidad
+##### MISMO PERO CON UN RANDOMSEARCH
 
-#Seleccionamos las variables con mayor impacto
-top_impact_pos = pd.DataFrame({'Variable': X_test_m2.columns, 'Impacto en Probabilidad': impacto_prob_1})
-top_impact_pos = top_impact_pos.sort_values(by='Impacto en Probabilidad', ascending=False).head(10)
-top_impact_neg = pd.DataFrame({'Variable': X_test_m2.columns, 'Impacto en Probabilidad': impacto_prob_1})
-top_impact_neg = top_impact_neg.sort_values(by='Impacto en Probabilidad', ascending=True).head(10)
+param_dist = {
+    'n_estimators': [100, 300, 500, 700],  # Número de árboles
+    'learning_rate': [0.01, 0.05, 0.1, 0.2],  # Tasa de aprendizaje
+    'max_depth': [4, 6, 8, 10],  # Profundidad máxima de los árboles
+    'colsample_bytree': [0.7, 0.8, 0.9],  # Fracción de características por árbol
+    'subsample': [0.7, 0.8, 0.9],  # Fracción de muestras por árbol
+    #'scale_pos_weight': [1, 2, 3, 5],  # Ajuste del peso para la clase minoritaria
+    'gamma': [0, 1, 3, 5],  # Regularización para evitar sobreajuste
+    'max_delta_step': [0, 1, 5],  # Paso máximo para mejorar la estabilidad
+    'min_child_weight': [1, 5, 10],  # Peso mínimo de las instancias en una hoja
+    }
 
-#grfico conjunto
-fig, axes = plt.subplots(1, 2, figsize=(14, 8))
-axes[0].barh(top_impact_pos['Variable'], top_impact_pos['Impacto en Probabilidad'] * 100, color='green')
-axes[0].set_title("Top 10 variables que aumentan la probabilidad de 24_repite = 1")
-axes[0].set_xlabel("Cambio Promedio en Probabilidad (%)")
-axes[0].axvline(0, color='black', linestyle='dashed')
-axes[0].invert_yaxis()
-axes[1].barh(top_impact_neg['Variable'], top_impact_neg['Impacto en Probabilidad'] * 100, color='red')
-axes[1].set_title("Top 10 variables que reducen la probabilidad de 24_repite = 1")
-axes[1].set_xlabel("Cambio Promedio en Probabilidad (%)")
-axes[1].axvline(0, color='black', linestyle='dashed')
-axes[1].invert_yaxis()
+model_rs2 = xgb.XGBClassifier(
+    objective='binary:logistic',
+    eval_metric='auc',
+    use_label_encoder=False,
+    random_state=42,
+    scale_pos_weight= len(y_train_m2[y_train_m2 == 0]) / len(y_train_m2[y_train_m2 == 1])  # Incluir scale_pos_weight aquí
+    )
 
-plt.tight_layout()
-plt.show()
+random_search2 = RandomizedSearchCV(
+    estimator=model_rs2,
+    param_distributions=param_dist,  # Espacio de parámetros para la búsqueda aleatoria
+    n_iter=100,  # Número de combinaciones aleatorias que se probarán
+    scoring='roc_auc',  # Queremos maximizar AUC
+    cv=3,  # Validación cruzada con 3 particiones
+    verbose=1,  # Muestra el progreso
+    random_state=42,
+    n_jobs=-1  # Usamos todos los núcleos de la CPU
+    )
+
+
+#fiteo del modelo
+random_search2.fit(X_train_m2, y_train_m2)
+print("Mejores parámetros:", random_search2.best_params_)
+print("Mejor AUC del train:", random_search2.best_score_)
+print(f"AUC ROC sobre train: {roc_auc_score(y_train_m2, random_search2.predict_proba(X_train_m2)[:, 1]):.4f}")
+best_model_2rs = random_search2.best_estimator_
+
+# Predicción
+y_pred_m2 = best_model_2rs.predict(X_test_m2)
+
+# Métricas
+print(classification_report(y_test_m2, y_pred_m2))
+print(f"AUC: {roc_auc_score(y_test_m2, best_model_2rs.predict_proba(X_test_m2)[:, 1]):.4f}")
+
+#analisis grafico
+explainer_2rs = shap.Explainer(best_model_2rs, X_train_m2)
+shap_values_2rs = explainer_2rs(X_test_m2)
+shap.summary_plot(shap_values_2rs, X_test_m2)
+shap.summary_plot(shap_values_2rs, X_test_m2, plot_type="bar")
+#veo con que variables interactúan las top5 features // 23_capacidad_maxima
+# 22_capacidad_maxima y 23_distrito_escolar_6
+shap.dependence_plot("actitud_cumple", shap_values_2rs.values, X_test_m2)
+shap.dependence_plot("actitud_consulta", shap_values_2rs.values, X_test_m2)
+shap.dependence_plot("actitud_manifiesta", shap_values_2rs.values, X_test_m2)
+shap.dependence_plot("actitud_puedeOrganizarse", shap_values_2rs.values, X_test_m2)
+shap.dependence_plot("22_turno_Doble", shap_values_2rs.values, X_test_m2)
+
+
+
 
 #############################################################################
 ###################   PROCESAMIENTO DE PASES  ###########################
@@ -675,10 +676,121 @@ pases_p = pases_p.drop(columns=['22_anio_pase','23_anio_pase','24_anio_pase'])
 pases_p[['22_cant_pases', '23_cant_pases', '24_cant_pases']] = pases_p[['22_cant_pases', '23_cant_pases', '24_cant_pases']].fillna(0)
 
 
-'''#######################################################################'''
-'''                PROCESAMIENTO PARA METER EN EL MODELO                  '''
-'''#######################################################################'''
+####################################
+###### MODELO 3 - MATRICULA, PPS y PASES
+####################################
 
+matricula_m3 = matricula_m2.copy()
+matricula_m3 = matricula_m3.merge(pases_p, on="documento", how="inner")
+
+
+#elimino VD y armo los conjuntos
+X_m3 = matricula_m3.drop(columns=['documento', 'id_miescuela', '24_repite'])  # Excluir las columnas que no se usarán
+y_m3 = matricula_m3['24_repite']
+X_train_m3, X_test_m3, y_train_m3, y_test_m3 = train_test_split(X_m3, y_m3, test_size=0.2, random_state=42)
+
+#modelo
+model_m3 = xgb.XGBClassifier(
+    objective='binary:logistic',
+    eval_metric='auc',
+    use_label_encoder=False,
+    n_estimators=500,  # Aumentar el número de árboles
+    learning_rate=0.05,  # Reducir la tasa de aprendizaje para evitar overfitting
+    max_depth=6,  # Controla la profundidad de los árboles
+    colsample_bytree=0.8,  # Para usar una fracción de las features en cada árbol
+    subsample=0.8,  # Para usar una fracción de los datos en cada iteración
+    random_state=42
+)
+model_m3.fit(X_train_m3, y_train_m3)
+y_pred_m3 = model_m3.predict(X_test_m3)
+accuracy_m3 = accuracy_score(y_test_m3, y_pred_m3)
+print(f"AUC sobre el train: {accuracy_m3:.4f}")
+print(f"AUC ROC sobre train: {roc_auc_score(y_train_m3, model_m3.predict_proba(X_train_m3)[:, 1]):.4f}")
+#prediccion
+predicciones_m3 = model_m3.predict(X_test_m3)
+#var imp
+importance_m3 = model_m3.get_booster().get_score(importance_type='weight')
+sorted_importance_m3 = sorted(importance_m3.items(), key=lambda x: x[1], reverse=True)
+#analisis de las predicciones
+print(classification_report(y_test_m3, y_pred_m3))  # Para obtener precisión, recall, f1-score
+print(f"AUC ROC sobre test: {roc_auc_score(y_test_m3, model_m3.predict_proba(X_test_m3)[:, 1]):.4f}")
+
+#graficos
+explainer_m3 = shap.Explainer(model_m3, X_train_m3)
+expected_value_m3 = explainer_m3.expected_value
+prob_base_m3 = 1 / (1 + np.exp(-expected_value_m3))
+print('Valor de prediccion de base: ', prob_base_m3)
+shap_values_m3 = explainer_m3(X_test_m3)
+shap.summary_plot(shap_values_m3, X_test_m3)
+shap.summary_plot(shap_values_m3, X_test_m3, plot_type="bar")
+
+
+tn, fp, fn, tp = confusion_matrix(y_test_m3, y_pred_m3).ravel()
+print(f"Verdaderos Positivos (TP): {tp}")
+print(f"Falsos Positivos (FP): {fp}")
+print(f"Verdaderos Negativos (TN): {tn}")
+print(f"Falsos Negativos (FN): {fn}")
+
+
+##### MISMO PERO CON UN RANDOMSEARCH
+
+param_dist = {
+    'n_estimators': [100, 300, 500, 700],  # Número de árboles
+    'learning_rate': [0.01, 0.05, 0.1, 0.2],  # Tasa de aprendizaje
+    'max_depth': [4, 6, 8, 10],  # Profundidad máxima de los árboles
+    'colsample_bytree': [0.7, 0.8, 0.9],  # Fracción de características por árbol
+    'subsample': [0.7, 0.8, 0.9],  # Fracción de muestras por árbol
+    #'scale_pos_weight': [1, 2, 3, 5],  # Ajuste del peso para la clase minoritaria
+    'gamma': [0, 1, 3, 5],  # Regularización para evitar sobreajuste
+    'max_delta_step': [0, 1, 5],  # Paso máximo para mejorar la estabilidad
+    'min_child_weight': [1, 5, 10],  # Peso mínimo de las instancias en una hoja
+    }
+
+model_rs3 = xgb.XGBClassifier(
+    objective='binary:logistic',
+    eval_metric='auc',
+    use_label_encoder=False,
+    random_state=42,
+    scale_pos_weight= len(y_train_m2[y_train_m2 == 0]) / len(y_train_m2[y_train_m2 == 1])  # Incluir scale_pos_weight aquí
+    )
+
+random_search3 = RandomizedSearchCV(
+    estimator=model_rs3,
+    param_distributions=param_dist,  # Espacio de parámetros para la búsqueda aleatoria
+    n_iter=100,  # Número de combinaciones aleatorias que se probarán
+    scoring='roc_auc',  # Queremos maximizar AUC
+    cv=3,  # Validación cruzada con 3 particiones
+    verbose=1,  # Muestra el progreso
+    random_state=42,
+    n_jobs=-1  # Usamos todos los núcleos de la CPU
+    )
+
+
+#fiteo del modelo
+random_search3.fit(X_train_m3, y_train_m3)
+print("Mejores parámetros:", random_search3.best_params_)
+print("Mejor AUC del train:", random_search3.best_score_)
+print(f"AUC ROC sobre train: {roc_auc_score(y_train_m3, random_search3.predict_proba(X_train_m3)[:, 1]):.4f}")
+best_model_3rs = random_search3.best_estimator_
+
+# Predicción
+y_pred_m3 = best_model_3rs.predict(X_test_m3)
+
+# Métricas
+print(classification_report(y_test_m3, y_pred_m3))
+print(f"AUC: {roc_auc_score(y_test_m3, best_model_3rs.predict_proba(X_test_m3)[:, 1]):.4f}")
+
+#analisis grafico
+explainer_3rs = shap.Explainer(best_model_3rs, X_train_m3)
+shap_values_3rs = explainer_3rs(X_test_m3)
+shap.summary_plot(shap_values_3rs, X_test_m3)
+shap.summary_plot(shap_values_3rs, X_test_m3, plot_type="bar")
+
+tn, fp, fn, tp = confusion_matrix(y_test_m3, y_pred_m3).ravel()
+print(f"Verdaderos Positivos (TP): {tp}")
+print(f"Falsos Positivos (FP): {fp}")
+print(f"Verdaderos Negativos (TN): {tn}")
+print(f"Falsos Negativos (FN): {fn}")
 
 
 #############################################################################
