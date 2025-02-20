@@ -28,16 +28,20 @@ from sklearn.model_selection import RandomizedSearchCV
 
 
 #LEVANTO LA MUESTRA
-apoyos = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.apoyos_bbdd.csv', low_memory=False)
-servicios = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.ft_servicios_documentos.csv', low_memory=False)
-matricula = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.matricula_documento.csv', low_memory=False)
-notas = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.notas_bbdd.csv', low_memory=False)
-pps = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.pps_documento.csv', low_memory=False)
-responsables = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.responsables_personas.csv', low_memory = False)
-dse = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.dse_personas.csv', low_memory = False)
-dd = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.dd_personas.csv', low_memory = False)
-ds = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.ds_personas.csv', low_memory = False)
-pases = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.pases.csv', low_memory = False)
+#apoyos = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.apoyos_bbdd.csv', low_memory=False)
+#servicios = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.ft_servicios_documentos.csv', low_memory=False)
+#matricula = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.matricula_documento.csv', low_memory=False)
+matricula = pd.read_csv('C:/Users/guillermina.mayorca/Downloads/0.matricula_documento.csv', low_memory=False)
+#notas = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.notas_bbdd.csv', low_memory=False)
+notas = pd.read_csv('C:/Users/guillermina.mayorca/Downloads/0.notas_bbdd.csv', low_memory=False)
+#pps = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.pps_documento.csv', low_memory=False)
+pps = pd.read_csv('C:/Users/guillermina.mayorca/Downloads/0.pps_documento.csv', low_memory=False)
+#responsables = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.responsables_personas.csv', low_memory = False)
+#dse = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.dse_personas.csv', low_memory = False)
+#dd = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.dd_personas.csv', low_memory = False)
+#ds = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.ds_personas.csv', low_memory = False)
+#pases = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.pases.csv', low_memory = False)
+pases = pd.read_csv('C:/Users/guillermina.mayorca/Downloads/0.pases.csv', low_memory = False)
 #localidades = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/1.localidades.csv', low_memory = False, delimiter = ';')
 #provincias = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/1.provincias.csv', low_memory = False, delimiter = ';')
 
@@ -383,6 +387,18 @@ shap.dependence_plot("22_distrito_escolar_6.0", shap_values.values, X_test)
 print(classification_report(y_test, y_pred))  # Para obtener precisión, recall, f1-score
 print(f"AUC: {roc_auc_score(y_test, model.predict_proba(X_test)[:, 1]):.4f}")
 
+
+#matriz de valores
+y_test.sum()
+tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
+print(f"Verdaderos Positivos (TP): {tp}")
+print(f"Falsos Positivos (FP): {fp}")
+print(f"Verdaderos Negativos (TN): {tn}")
+print(f"Falsos Negativos (FN): {fn}")
+
+
+
+
 ##### MISMO PERO CON UN RANDOMSEARCH
 
 param_dist = {
@@ -439,7 +455,17 @@ shap.dependence_plot("22_turno_Tarde", shap_values_1rs.values, X_test)
 shap.dependence_plot("22_distrito_escolar_6.0", shap_values_1rs.values, X_test)
 # Métricas
 print(classification_report(y_test, y_pred))
-print(f"AUC: {roc_auc_score(y_test, best_model.predict_proba(X_test)[:, 1]):.4f}")
+print(f"AUC ROC en test: {roc_auc_score(y_test, best_model.predict_proba(X_test)[:, 1]):.4f}")
+print(f'Accuracy del test: {accuracy_score(y_test, y_pred):.6f}')
+
+
+#matriz de valores
+y_test.sum()
+tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
+print(f"Verdaderos Positivos (TP): {tp}")
+print(f"Falsos Positivos (FP): {fp}")
+print(f"Verdaderos Negativos (TN): {tn}")
+print(f"Falsos Negativos (FN): {fn}")
 
 
 
@@ -569,6 +595,16 @@ sorted_importance_m2 = sorted(importance_m2.items(), key=lambda x: x[1], reverse
 #analisis de las predicciones
 print(classification_report(y_test_m2, y_pred_m2))  # Para obtener precisión, recall, f1-score
 print(f"AUC ROC sobre test: {roc_auc_score(y_test_m2, model_m2.predict_proba(X_test_m2)[:, 1]):.4f}")
+print(f'Accuracy del test: {accuracy_score(y_test_m2, y_pred_m2):.6f}')
+
+
+#matriz de valores
+y_test_m2.sum()
+tn, fp, fn, tp = confusion_matrix(y_test_m2, y_pred_m2).ravel()
+print(f"Verdaderos Positivos (TP): {tp}")
+print(f"Falsos Positivos (FP): {fp}")
+print(f"Verdaderos Negativos (TN): {tn}")
+print(f"Falsos Negativos (FN): {fn}")
 
 #graficos
 explainer_m2 = shap.Explainer(model_m2, X_train_m2)
@@ -586,6 +622,7 @@ shap.dependence_plot("actitud_consulta", shap_values_m2.values, X_test_m2)
 shap.dependence_plot("actitud_manifiesta", shap_values_m2.values, X_test_m2)
 shap.dependence_plot("23_capacidad_maxima", shap_values_m2.values, X_test_m2)
 shap.dependence_plot("22_capacidad_maxima", shap_values_m2.values, X_test_m2)
+
 
 
 ##### MISMO PERO CON UN RANDOMSEARCH
@@ -635,6 +672,16 @@ y_pred_m2 = best_model_2rs.predict(X_test_m2)
 # Métricas
 print(classification_report(y_test_m2, y_pred_m2))
 print(f"AUC: {roc_auc_score(y_test_m2, best_model_2rs.predict_proba(X_test_m2)[:, 1]):.4f}")
+print(f'Accuracy del test: {accuracy_score(y_test_m2, y_pred_m2):.6f}')
+
+
+#matriz de valores
+y_test_m2.sum()
+tn, fp, fn, tp = confusion_matrix(y_test_m2, y_pred_m2).ravel()
+print(f"Verdaderos Positivos (TP): {tp}")
+print(f"Falsos Positivos (FP): {fp}")
+print(f"Verdaderos Negativos (TN): {tn}")
+print(f"Falsos Negativos (FN): {fn}")
 
 #analisis grafico
 explainer_2rs = shap.Explainer(best_model_2rs, X_train_m2)
@@ -779,18 +826,22 @@ y_pred_m3 = best_model_3rs.predict(X_test_m3)
 # Métricas
 print(classification_report(y_test_m3, y_pred_m3))
 print(f"AUC: {roc_auc_score(y_test_m3, best_model_3rs.predict_proba(X_test_m3)[:, 1]):.4f}")
+print(f'Accuracy del test: {accuracy_score(y_test_m3, y_pred_m3):.6f}')
+
+#matriz de valores
+y_test_m3.sum()
+tn, fp, fn, tp = confusion_matrix(y_test_m3, y_pred_m3).ravel()
+print(f"Verdaderos Positivos (TP): {tp}")
+print(f"Falsos Positivos (FP): {fp}")
+print(f"Verdaderos Negativos (TN): {tn}")
+print(f"Falsos Negativos (FN): {fn}")
+
 
 #analisis grafico
 explainer_3rs = shap.Explainer(best_model_3rs, X_train_m3)
 shap_values_3rs = explainer_3rs(X_test_m3)
 shap.summary_plot(shap_values_3rs, X_test_m3)
 shap.summary_plot(shap_values_3rs, X_test_m3, plot_type="bar")
-
-tn, fp, fn, tp = confusion_matrix(y_test_m3, y_pred_m3).ravel()
-print(f"Verdaderos Positivos (TP): {tp}")
-print(f"Falsos Positivos (FP): {fp}")
-print(f"Verdaderos Negativos (TN): {tn}")
-print(f"Falsos Negativos (FN): {fn}")
 
 
 #############################################################################
@@ -830,6 +881,151 @@ for col in columnas_notas:
     notas[col] = notas[col].astype(str).str.strip().str.lower()  # Limpieza de texto
     notas[col] = notas[col].replace(escala)  # Reemplazo según el diccionario
     notas[col] = notas[col].apply(lambda x: int(x) if isinstance(x, str) and x.isdigit() else x)  # Conversión de números en texto
+
+
+notas['rank'] = notas.groupby('id_alumno')['ciclo_lectivo'].rank(method='dense', ascending=True).astype(int)
+notas_pivot = notas.pivot(index='id_alumno', columns='rank', values=[col for col in notas.columns if col not in ['id_alumno', 'rank']])
+
+# Renombrar columnas con prefijos 1_, 2_, 3_
+notas_pivot.columns = [f"{rank}_{col}" for col, rank in notas_pivot.columns]
+notas_pivot.reset_index(inplace=True)
+
+#elimino las columnas de ciclo lectivo y ademas las de las notas del segundo semestre
+#la idea es dejar solo las del primer semestre para que pueda dar margen de accion
+notas_pivot = notas_pivot[[col for col in notas_pivot.columns if 'ciclo_lectivo' not in col and 'nivel' not in col and not any(pattern in col for pattern in ['3_a_n3', '3_a_n4'])]]
+notas_pivot = notas_pivot.replace(['nan', ''], np.nan)
+notas_pivot.iloc[:, 1:] = notas_pivot.iloc[:, 1:].apply(pd.to_numeric, errors='coerce').astype(float)
+notas_pivot.dtypes
+
+####################################
+###### MODELO 4 - MATRICULA, PPS, PASES y NOTAS
+####################################
+
+matricula_m4 = matricula_m3.copy()
+matricula_m4 = matricula_m4.merge(notas_pivot, left_on="id_miescuela", right_on="id_alumno", how="inner")
+
+#elimino VD y armo los conjuntos
+X_m4 = matricula_m4.drop(columns=['documento', 'id_miescuela', '24_repite'])  # Excluir las columnas que no se usarán
+y_m4 = matricula_m4['24_repite']
+X_train_m4, X_test_m4, y_train_m4, y_test_m4 = train_test_split(X_m4, y_m4, test_size=0.2, random_state=42)
+
+#modelo
+model_m4 = xgb.XGBClassifier(
+    objective='binary:logistic',
+    eval_metric='auc',
+    n_estimators=500,  # Aumentar el número de árboles
+    learning_rate=0.05,  # Reducir la tasa de aprendizaje para evitar overfitting
+    max_depth=6,  # Controla la profundidad de los árboles
+    colsample_bytree=0.8,  # Para usar una fracción de las features en cada árbol
+    subsample=0.8,  # Para usar una fracción de los datos en cada iteración
+    random_state=42
+)
+
+model_m4.fit(X_train_m4, y_train_m4)
+y_pred_m4 = model_m4.predict(X_test_m4)
+accuracy_m4 = accuracy_score(y_test_m4, y_pred_m4)
+print(f"AUC sobre el train: {accuracy_m4:.4f}")
+print(f"AUC ROC sobre train: {roc_auc_score(y_train_m4, model_m4.predict_proba(X_train_m4)[:, 1]):.4f}")
+#prediccion
+predicciones_m4 = model_m4.predict(X_test_m4)
+#var imp
+importance_m4 = model_m4.get_booster().get_score(importance_type='weight')
+sorted_importance_m4 = sorted(importance_m4.items(), key=lambda x: x[1], reverse=True)
+#analisis de las predicciones
+print(classification_report(y_test_m4, y_pred_m4))  # Para obtener precisión, recall, f1-score
+print(f"AUC ROC sobre test: {roc_auc_score(y_test_m4, model_m4.predict_proba(X_test_m4)[:, 1]):.4f}")
+print(f'Accuracy del test: {accuracy_score(y_test_m4, y_pred_m4):.6f}')
+
+#matriz de valores
+y_test_m4.sum()
+tn, fp, fn, tp = confusion_matrix(y_test_m4, y_pred_m4).ravel()
+print(f"Verdaderos Positivos (TP): {tp}")
+print(f"Falsos Positivos (FP): {fp}")
+print(f"Verdaderos Negativos (TN): {tn}")
+print(f"Falsos Negativos (FN): {fn}")
+
+
+'''
+VER ACA QUE PASA
+'''
+
+#graficos
+explainer_m4 = shap.Explainer(model_m4, X_train_m4)
+expected_value_m4 = explainer_m4.expected_value
+prob_base_m4 = 1 / (1 + np.exp(-expected_value_m4))
+print('Valor de prediccion de base: ', prob_base_m4)
+shap_values_m4 = explainer_m4(X_test_m4)
+shap.summary_plot(shap_values_m4, X_test_m4)
+shap.summary_plot(shap_values_m4, X_test_m4, plot_type="bar")
+
+
+##### MISMO PERO CON UN RANDOMSEARCH
+
+param_dist = {
+    'n_estimators': [100, 300, 500, 700],  # Número de árboles
+    'learning_rate': [0.01, 0.05, 0.1, 0.2],  # Tasa de aprendizaje
+    'max_depth': [4, 6, 8, 10],  # Profundidad máxima de los árboles
+    'colsample_bytree': [0.7, 0.8, 0.9],  # Fracción de características por árbol
+    'subsample': [0.7, 0.8, 0.9],  # Fracción de muestras por árbol
+    #'scale_pos_weight': [1, 2, 3, 5],  # Ajuste del peso para la clase minoritaria
+    'gamma': [0, 1, 3, 5],  # Regularización para evitar sobreajuste
+    'max_delta_step': [0, 1, 5],  # Paso máximo para mejorar la estabilidad
+    'min_child_weight': [1, 5, 10],  # Peso mínimo de las instancias en una hoja
+    }
+
+model_rs3 = xgb.XGBClassifier(
+    objective='binary:logistic',
+    eval_metric='auc',
+    use_label_encoder=False,
+    random_state=42,
+    scale_pos_weight= len(y_train_m2[y_train_m2 == 0]) / len(y_train_m2[y_train_m2 == 1])  # Incluir scale_pos_weight aquí
+    )
+
+random_search3 = RandomizedSearchCV(
+    estimator=model_rs3,
+    param_distributions=param_dist,  # Espacio de parámetros para la búsqueda aleatoria
+    n_iter=100,  # Número de combinaciones aleatorias que se probarán
+    scoring='roc_auc',  # Queremos maximizar AUC
+    cv=3,  # Validación cruzada con 3 particiones
+    verbose=1,  # Muestra el progreso
+    random_state=42,
+    n_jobs=-1  # Usamos todos los núcleos de la CPU
+    )
+
+
+#fiteo del modelo
+random_search3.fit(X_train_m3, y_train_m3)
+print("Mejores parámetros:", random_search3.best_params_)
+print("Mejor AUC del train:", random_search3.best_score_)
+print(f"AUC ROC sobre train: {roc_auc_score(y_train_m3, random_search3.predict_proba(X_train_m3)[:, 1]):.4f}")
+best_model_3rs = random_search3.best_estimator_
+
+# Predicción
+y_pred_m3 = best_model_3rs.predict(X_test_m3)
+
+# Métricas
+print(classification_report(y_test_m3, y_pred_m3))
+print(f"AUC: {roc_auc_score(y_test_m3, best_model_3rs.predict_proba(X_test_m3)[:, 1]):.4f}")
+print(f'Accuracy del test: {accuracy_score(y_test_m3, y_pred_m3):.6f}')
+
+#matriz de valores
+tn, fp, fn, tp = confusion_matrix(y_test_m3, y_pred_m3).ravel()
+print(f"Verdaderos Positivos (TP): {tp}")
+print(f"Falsos Positivos (FP): {fp}")
+print(f"Verdaderos Negativos (TN): {tn}")
+print(f"Falsos Negativos (FN): {fn}")
+
+
+#analisis grafico
+explainer_3rs = shap.Explainer(best_model_3rs, X_train_m3)
+shap_values_3rs = explainer_3rs(X_test_m3)
+shap.summary_plot(shap_values_3rs, X_test_m3)
+shap.summary_plot(shap_values_3rs, X_test_m3, plot_type="bar")
+
+
+
+
+
 
 
 #############################################################################
