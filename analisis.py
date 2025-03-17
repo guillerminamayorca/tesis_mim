@@ -16,30 +16,36 @@ from geopy.exc import GeocoderTimedOut
 import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
-from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
-import statsmodels.api as sm
 import seaborn as sns
 import shap
-from statsmodels.stats.outliers_influence import variance_inflation_factor
 from sklearn.metrics import classification_report, roc_auc_score, confusion_matrix
 from sklearn.model_selection import RandomizedSearchCV
-
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+import re
+from collections import defaultdict
 
 
 #LEVANTO LA MUESTRA
 apoyos = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.apoyos_bbdd.csv', low_memory=False)
 servicios = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.ft_servicios_documentos.csv', low_memory=False)
 matricula = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.matricula_documento.csv', low_memory=False)
+#matricula = pd.read_csv('C:/Users/guillermina.mayorca/Downloads/0.matricula_documento.csv', low_memory=False)
 notas = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.notas_bbdd.csv', low_memory=False)
+#notas = pd.read_csv('C:/Users/guillermina.mayorca/Downloads/0.notas_bbdd.csv', low_memory=False)
 pps = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.pps_documento.csv', low_memory=False)
+#pps = pd.read_csv('C:/Users/guillermina.mayorca/Downloads/0.pps_documento.csv', low_memory=False)
 responsables = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.responsables_personas.csv', low_memory = False)
 dse = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.dse_personas.csv', low_memory = False)
 dd = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.dd_personas.csv', low_memory = False)
 ds = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.ds_personas.csv', low_memory = False)
 pases = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.pases.csv', low_memory = False)
+#pases = pd.read_csv('C:/Users/guillermina.mayorca/Downloads/0.pases.csv', low_memory = False)
 #localidades = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/1.localidades.csv', low_memory = False, delimiter = ';')
 #provincias = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/1.provincias.csv', low_memory = False, delimiter = ';')
+secciones_notas = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.notas_bbdd.csv', low_memory=False)
+
 
 '''
 ###########################################################################
@@ -110,32 +116,6 @@ def obtener_coordenadas(row, index, columna_direccion):
 ###########################################################################
 '''
 
-#############################################################################
-###################    PROCESAMIENTO DE APOYOS       ########################
-#############################################################################
-
-## TRABAJO CON LA BASE DE APOYOS PARA PODER DEJAR COLS BINARIAS AGRUPADAS X EL CL
-
-apoyos_consolidado = apoyos.groupby(['id_alumno', 'periodo']).agg(
-    ag_apoyo=('ag_apoyo', lambda x: 'Sí' if 'Sí' in x.values else 'No'),
-    ag_apoyo_tipo=('ag_apoyo_tipo', lambda x: list({item for sublist in x.dropna().apply(eval) for item in sublist})),
-).reset_index()
-
-unique_values = set(val for sublist in apoyos_consolidado['ag_apoyo_tipo'] for val in sublist)
-
-for value in unique_values:
-    apoyos_consolidado[f'ag_at_{value}'] = apoyos_consolidado['ag_apoyo_tipo'].apply(lambda x: 1 if value in x else 0)
-
-apoyos_merge = apoyos_consolidado.drop(columns=['ag_apoyo_tipo'])
-
-## ACA VALE LA PENA DEJARLO APERTURADO POR PERIODO O DEJO UNA FILA X ALUMNO
-
-
-#############################################################################
-###################   PROCESAMIENTO DE SERVICIOS  ###########################
-#############################################################################
-
-#no hace falta procesamiento
 
 #############################################################################
 ###################   PROCESAMIENTO DE MATRICULA  ###########################
@@ -146,6 +126,7 @@ matricula['repite'].sum()
 matricula['altura'] = matricula['altura'].apply(lambda x: str(int(float(x))) if pd.notna(x) and str(x).strip() != '' else '')
 matricula['Direccion'] = matricula['calle'].fillna('') + ' ' + matricula['altura'] + ', ' + matricula['barrio'].fillna('') + ', Ciudad de Buenos Aires, Argentina'
 matricula['Direccion2'] = matricula['calle'].fillna('') + ' ' + matricula['altura'] + ', Ciudad de Buenos Aires , Argentina'
+'''
 geolocator = Nominatim(user_agent="mi_aplicacion")
 direcciones = pd.DataFrame({'Direccion': matricula['Direccion'].dropna().unique(),'Direccion2': matricula['Direccion2'].dropna().unique()})
 direcciones[['latitud', 'longitud']] = direcciones.apply(lambda row: obtener_coordenadas(row, row.name,'Direccion2'), axis=1)
@@ -199,7 +180,7 @@ diccionario = {'HUMBERTO Iº 1573, Ciudad de Buenos Aires , Argentina':[-34.6210
                'AVDA. ESCALADA S/N E/AVDA. GRAL. FERNANDEZ DE LA CRUZ Y VIAS DEL FFCC BELGRANO SUR , Ciudad de Buenos Aires , Argentina':[-34.67187935035184, -58.461509412237575],
                'CARLOS H. PERETTE Y CALLE 10 , Ciudad de Buenos Aires , Argentina':[-34.58177284319252, -58.38040295370624]
                }
-'''
+
 diccionario = {'HUMBERTO 1º 1573, Ciudad de Buenos Aires , Argentina':[-34.62105777913497, -58.38821210318528],
                'CORONEL MARTINIANO CHILAVERT 5460, Ciudad de Buenos Aires , Argentina':[-34.67904025544257, -58.467149062704536],
                'PALOS Y JUAN MANUEL BLANES, Ciudad de Buenos Aires , Argentina':[-34.632700550024396, -58.3642277627076],
@@ -246,7 +227,7 @@ diccionario = {'HUMBERTO 1º 1573, Ciudad de Buenos Aires , Argentina':[-34.6210
                'AVENIDA ESCALADA Y AVENIDA GENERAL FERNANDEZ, Ciudad de Buenos Aires , Argentina':[-34.67187935035184, -58.461509412237575],
                'CARLOS H. PERETTE Y CALLE ISLAS GALAPAGOS, Ciudad de Buenos Aires , Argentina':[-34.58177284319252, -58.38040295370624]
                }
-'''
+
 for direccion, coordenadas in diccionario.items():
     direcciones.loc[direcciones['Direccion2'] == direccion, ['latitud', 'longitud']] = coordenadas
 
@@ -254,6 +235,7 @@ matricula = matricula.merge(direcciones[['Direccion2', 'latitud', 'longitud']],
                                             on='Direccion2', 
                                             how='left')
 matricula = matricula.sort_values(by='latitud', na_position='first')
+'''
 
 #pivoteo para quedarme solo con una fila x estudiante
 matricula['ciclo_lectivo'] = matricula['ciclo_lectivo'].astype(str)
@@ -280,8 +262,8 @@ matricula_p = matricula_p.drop(columns=['23_anio','22_anio','24_anio'])
 #matricula_p['24_mantiene_cue'] = (matricula_p['23_cueanexo'] == matricula_p['24_cueanexo']).astype(int)
 
 
-matricula_p.to_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.matricula_pivotada.csv',index=False)
-matricula_p = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.matricula_pivotada.csv', low_memory=False)
+#matricula_p.to_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.matricula_pivotada.csv',index=False)
+#matricula_p = pd.read_csv('C:/Users/guima/OneDrive - Universidad Torcuato Di Tella/02 MiM/TESIS/edu/codigo_bases/0.matricula_pivotada.csv', low_memory=False)
 
 #chequear la correlación entre las columnas
 corr_matrix = matricula_p.corr().round(3)
@@ -325,6 +307,12 @@ col_ohe = ['22_turno', '23_turno', '24_turno','22_jornada','23_jornada','24_jorn
            '22_distrito_escolar','23_distrito_escolar','24_distrito_escolar','22_comuna','23_comuna',
            '24_comuna','22_barrio','23_barrio','24_barrio']
 matricula_modelo_ohe = pd.get_dummies(matricula_modelo, columns=col_ohe, prefix=col_ohe)
+
+
+print(f"Valor máximo: {matricula_modelo_ohe.drop(columns=['documento','id_miescuela']).max().max()}")
+print(f"Dónde está el valor máximo: {matricula_modelo_ohe.drop(columns=['documento','id_miescuela']).max().idxmax()}")
+print(f"Valor mínimo: {matricula_modelo_ohe.drop(columns=['documento','id_miescuela']).min().min()}")
+print(f"Dónde está el valor mínimo: {matricula_modelo_ohe.drop(columns=['documento','id_miescuela']).min().idxmax()}")
 
 
 ####################################
@@ -383,6 +371,18 @@ shap.dependence_plot("22_distrito_escolar_6.0", shap_values.values, X_test)
 print(classification_report(y_test, y_pred))  # Para obtener precisión, recall, f1-score
 print(f"AUC: {roc_auc_score(y_test, model.predict_proba(X_test)[:, 1]):.4f}")
 
+
+#matriz de valores
+y_test.sum()
+tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
+print(f"Verdaderos Positivos (TP): {tp}")
+print(f"Falsos Positivos (FP): {fp}")
+print(f"Verdaderos Negativos (TN): {tn}")
+print(f"Falsos Negativos (FN): {fn}")
+
+
+
+
 ##### MISMO PERO CON UN RANDOMSEARCH
 
 param_dist = {
@@ -439,7 +439,17 @@ shap.dependence_plot("22_turno_Tarde", shap_values_1rs.values, X_test)
 shap.dependence_plot("22_distrito_escolar_6.0", shap_values_1rs.values, X_test)
 # Métricas
 print(classification_report(y_test, y_pred))
-print(f"AUC: {roc_auc_score(y_test, best_model.predict_proba(X_test)[:, 1]):.4f}")
+print(f"AUC ROC en test: {roc_auc_score(y_test, best_model.predict_proba(X_test)[:, 1]):.4f}")
+print(f'Accuracy del test: {accuracy_score(y_test, y_pred):.6f}')
+
+
+#matriz de valores
+y_test.sum()
+tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
+print(f"Verdaderos Positivos (TP): {tp}")
+print(f"Falsos Positivos (FP): {fp}")
+print(f"Verdaderos Negativos (TN): {tn}")
+print(f"Falsos Negativos (FN): {fn}")
 
 
 
@@ -457,9 +467,10 @@ for col in columnas_json:
         pps = pps.join(json_data).drop(columns=['actitud'])
     else:
         pps = expandir_columna_json(pps, col)
+
         
 col_texto = ['actitud_observaciones','convivencia_observaciones','trayectoria_destaca','trayectoria_interes',
-             'trayectoria_contenidos','trayectoria_interes','trayectoria_contenidos','trayectoria_ajustesAreas','trayectoria_cualesAjustes',
+             'trayectoria_contenidos','trayectoria_ajustesAreas','trayectoria_cualesAjustes',
              'vinculo_observaciones','antecedentes_antecedentes','antecedentes_poseeCertificado','antecedentes_informe.url',
              'antecedentes_informe.filename','intervenciones_informe.url','intervenciones_informe.filename',
              'actitud_como','actitud_pedagogica','trayectoria_ajustesRazonables','jornada_cual','jornada_observaciones',
@@ -467,6 +478,18 @@ col_texto = ['actitud_observaciones','convivencia_observaciones','trayectoria_de
              'convivencia_vinculapares','actitud_trabaja','actitud_autonomo','actitud_participa','trayectoria_requirioadecuaciones']
 
 pps = pps.drop(columns=col_texto)
+
+## Chequeo cuantos nulos tengo en als columnas 
+nulos_por_columna = pps.isnull().sum()
+plt.figure(figsize=(15, 5))
+nulos_por_columna.plot(kind="bar", color="red", alpha=0.7)
+plt.xlabel("Columna")
+plt.ylabel("Cantidad de Nulos")
+plt.title("Cantidad de valores nulos por columna - PPS")
+plt.xticks(rotation=90)  # Rotar los nombres de las columnas para mejor visibilidad
+plt.grid(axis="y", linestyle="--", alpha=0.5)
+plt.show()
+
 
 
 valores_unicos_dict = {col: pps[col].unique().tolist() for col in pps.columns}
@@ -479,15 +502,69 @@ conteo_total = conteo_nulos + conteo_vacios  # Suma ambos conteos
 
 #adaptacion a valores aptos
 cols_a_convertir = ['trayectoria_requirio', 'jornada_participa', 'trayectoria_requirioacompañada','trayectoria_requiriopedagogico'] 
-pps[cols_a_convertir] = pps[cols_a_convertir].replace({'Si': 1, 'Sí': 1, 'No': 0, '':-1, None: -1, np.nan: -1})
+pps[cols_a_convertir] = pps[cols_a_convertir].replace({'Si': 1, 'Sí': 1, 'No': 0, '': np.nan, None: np.nan, np.nan: np.nan})
 
 cols_frec = ['actitud_demuestra', 'actitud_logra', 'actitud_consulta','actitud_cumple',
              'actitud_manifiesta','actitud_puedeOrganizarse','convivencia_acude','convivencia_mantiene',
              'convivencia_respeta','convivencia_vincula','vinculo_acompaña','vinculo_participa'] 
-pps[cols_frec] = pps[cols_frec].replace({'Con poca frecuencia': 0, 'Frecuentemente': 1, 'Siempre':2, '':-1, None: -1, np.nan: -1})
+pps[cols_frec] = pps[cols_frec].replace({'Con poca frecuencia': 0, 'Frecuentemente': 1, 'Siempre':2, '': np.nan, None: np.nan, np.nan: np.nan})
 
 valores_unicos_check = {col: pps[col].unique().tolist() for col in pps.columns}
 
+
+# Definir los prefijos y agrupar las columnas por estos
+prefijos = ["actitud", "convivencia", "vinculo", 'trayectoria']
+grupos = defaultdict(list)
+
+# Agrupar columnas según prefijos
+for col in pps.columns:
+    for prefijo in prefijos:
+        if col.startswith(prefijo):
+            grupos[prefijo].append(col)
+
+#la saco porque la convierto por separado, tiene valores categóricos
+if 'vinculo_adulto' in grupos['vinculo']:
+    grupos['vinculo'].remove('vinculo_adulto')
+if 'trayectoria_interrumpida' in grupos['trayectoria']:
+    grupos['trayectoria'].remove('trayectoria_interrumpida')
+
+
+# Mostrar los grupos creados
+for prefijo, variables in grupos.items():
+    print(f"{prefijo}: {variables}")
+
+for index, row in pps.iterrows():
+    # Limpiar 'vinculo_adulto' (eliminar caracteres especiales, espacios, etc.)
+    cleaned_vinculo_adulto = re.sub(r'[^A-Za-z0-9]+', '', str(row['vinculo_adulto'])).strip()
+    
+    # Si 'vinculo_adulto' queda vacío después de limpiar, establecer las demás columnas de 'vinculo' a 0
+    if not cleaned_vinculo_adulto:
+        for var in grupos['vinculo']:
+            if var != 'vinculo_adulto':  # Excluir 'vinculo_adulto' de la asignación
+                pps.at[index, var] = 0
+
+# Imputar los valores faltantes con el promedio de las otras variables del grupo
+for prefijo, variables in grupos.items():
+    for index, row in pps.iterrows():
+        # Identificar las columnas con valores no nulos
+        non_null_values = row[variables].dropna()
+        
+        if len(non_null_values) > 0:
+            # Calcular el promedio de los valores no nulos
+            mean_value = non_null_values.mean()
+            
+            # Imputar los valores faltantes con el promedio calculado
+            for var in variables:
+                if pd.isna(row[var]):
+                    pps.at[index, var] = mean_value
+
+# Redondear los valores en las columnas de los grupos de los prefijos y reemplazar los nulos con 0
+for prefijo, variables in grupos.items():
+    # Redondear valores a 2 decimales en las columnas correspondientes
+    pps[variables] = pps[variables].round(0)
+    
+    # Reemplazar valores nulos con 0
+    pps[variables] = pps[variables].fillna(0)
 
 #texto libre ver
 'trayectoria_interrumpida'
@@ -525,6 +602,7 @@ for col, keywords in map_vinculo.items():
     pps[col] = pps['vinculo_adulto'].apply(lambda x: 1 if any(kw in x for kw in keywords) else 0)
 
 
+
 ####################################
 ###### MODELO 2 - MATRICULA Y PPS
 ####################################
@@ -533,18 +611,74 @@ matricula_m2 = matricula_modelo_ohe.copy()
 
 #le agrego la info de pps sacando la col de trayectoria_requirio xq no la proc
 #y la de vinculo_adulto porque le hice OHE
-
 matricula_m2 = matricula_m2.merge(pps, on="documento", how="inner")
 matricula_m2 = matricula_m2.drop(columns=['ciclo_lectivo','id_miesucela','trayectoria_interrumpida',
                                           'vinculo_adulto','23_sobreedad'])
+
+'''
+PCA
+
+
+#chequeo la corr entre las variables de la X antes de correr el modelo para hacer PCA
+corr_matrix = matricula_m2.corr().round(3)
+plt.figure(figsize=(50, 30))
+sns.heatmap(corr_matrix, annot=True, cmap='coolwarm')
+plt.title('CORR MODELO 2 - MATRICULA CON PPS', fontsize=20)  # Aquí se agrega el título
+plt.show()
+
+#hago PCA sobre las variables que veo que tienen mucha correlacion
+prefijos = ["actitud", "trayectoria", "convivencia"]  # <-- Reemplaza con tus prefijos reales
+grupos = defaultdict(list)
+
+# Agrupar columnas según prefijos
+for col in matricula_m2.columns:
+    for prefijo in prefijos:
+        if col.startswith(prefijo):
+            grupos[prefijo].append(col)
+
+# aplico PCA
+for prefijo, variables in grupos.items():
+    if len(variables) > 1:
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(matricula_m2[variables])
+        
+        # PCA con múltiples componentes
+        pca = PCA(n_components=min(len(variables), 2))  # Usar 2 si hay suficiente información
+        X_pca = pca.fit_transform(X_scaled)
+        # Normalizar los pesos de las variables para que la suma de cada componente sea 1
+        pesos_normalizados = np.abs(pca.components_) / np.abs(pca.components_).sum(axis=1, keepdims=True)
+        # Calcular los valores del componente para cada registro utilizando los pesos normalizados
+        X_pca_normalizado = X_scaled.dot(pesos_normalizados.T)
+        # Convertir en DataFrame para visualizar mejor
+        pca_df = pd.DataFrame(pesos_normalizados, columns=variables, index=[f"{prefijo}_PC{i+1}" for i in range(pca.n_components_)])
+
+        # Visualizar con un heatmap
+        plt.figure(figsize=(10, 5))
+        sns.heatmap(pca_df, annot=True, cmap='coolwarm', center=0)
+        plt.title(f"Pesos de las variables en {prefijo}_PCA")
+        plt.show()
+        
+        # Guardar las nuevas columnas en el dataset
+        for i in range(X_pca.shape[1]):
+            matricula_m2[f"{prefijo}_PCA_{i+1}"] = X_pca[:, i]
+        
+        # Eliminar las variables originales
+        matricula_m2.drop(columns=variables, inplace=True)
+        
+        # Mostrar varianza explicada
+        print(f"PCA para {prefijo} - Varianza explicada acumulada: {pca.explained_variance_ratio_.sum():.4f}")
+
+for prefijo, variables in grupos.items():
+    print(f"PCA para {prefijo} - Varianza explicada acumulada: {pca.explained_variance_ratio_.sum():.4f}")
+'''
 
 #elimino VD y armo los conjuntos
 X_m2 = matricula_m2.drop(columns=['documento', 'id_miescuela', '24_repite'])  # Excluir las columnas que no se usarán
 y_m2 = matricula_m2['24_repite']
 X_train_m2, X_test_m2, y_train_m2, y_test_m2 = train_test_split(X_m2, y_m2, test_size=0.2, random_state=42)
 
+
 #modelo
-#model2 = xgb.XGBClassifier(objective='binary:logistic', eval_metric='auc', use_label_encoder=False)
 model_m2 = xgb.XGBClassifier(
     objective='binary:logistic',
     eval_metric='auc',
@@ -569,6 +703,16 @@ sorted_importance_m2 = sorted(importance_m2.items(), key=lambda x: x[1], reverse
 #analisis de las predicciones
 print(classification_report(y_test_m2, y_pred_m2))  # Para obtener precisión, recall, f1-score
 print(f"AUC ROC sobre test: {roc_auc_score(y_test_m2, model_m2.predict_proba(X_test_m2)[:, 1]):.4f}")
+print(f'Accuracy del test: {accuracy_score(y_test_m2, y_pred_m2):.6f}')
+
+
+#matriz de valores
+y_test_m2.sum()
+tn, fp, fn, tp = confusion_matrix(y_test_m2, y_pred_m2).ravel()
+print(f"Verdaderos Positivos (TP): {tp}")
+print(f"Falsos Positivos (FP): {fp}")
+print(f"Verdaderos Negativos (TN): {tn}")
+print(f"Falsos Negativos (FN): {fn}")
 
 #graficos
 explainer_m2 = shap.Explainer(model_m2, X_train_m2)
@@ -581,11 +725,12 @@ shap.summary_plot(shap_values_m2, X_test_m2, plot_type="bar")
 
 #quiero ver con que variables interactúan las de actitud que parecen ser las más
 #significativas y si es que cambia la interaccion de las top5 de antes
-shap.dependence_plot("actitud_cumple", shap_values_m2.values, X_test_m2)
+shap.dependence_plot("actitud_PCA_1", shap_values_m2.values, X_test_m2)
 shap.dependence_plot("actitud_consulta", shap_values_m2.values, X_test_m2)
 shap.dependence_plot("actitud_manifiesta", shap_values_m2.values, X_test_m2)
 shap.dependence_plot("23_capacidad_maxima", shap_values_m2.values, X_test_m2)
 shap.dependence_plot("22_capacidad_maxima", shap_values_m2.values, X_test_m2)
+
 
 
 ##### MISMO PERO CON UN RANDOMSEARCH
@@ -635,6 +780,16 @@ y_pred_m2 = best_model_2rs.predict(X_test_m2)
 # Métricas
 print(classification_report(y_test_m2, y_pred_m2))
 print(f"AUC: {roc_auc_score(y_test_m2, best_model_2rs.predict_proba(X_test_m2)[:, 1]):.4f}")
+print(f'Accuracy del test: {accuracy_score(y_test_m2, y_pred_m2):.6f}')
+
+
+#matriz de valores
+print(y_test_m2.sum())
+tn, fp, fn, tp = confusion_matrix(y_test_m2, y_pred_m2).ravel()
+print(f"Verdaderos Positivos (TP): {tp}")
+print(f"Falsos Positivos (FP): {fp}")
+print(f"Verdaderos Negativos (TN): {tn}")
+print(f"Falsos Negativos (FN): {fn}")
 
 #analisis grafico
 explainer_2rs = shap.Explainer(best_model_2rs, X_train_m2)
@@ -643,24 +798,21 @@ shap.summary_plot(shap_values_2rs, X_test_m2)
 shap.summary_plot(shap_values_2rs, X_test_m2, plot_type="bar")
 #veo con que variables interactúan las top5 features // 23_capacidad_maxima
 # 22_capacidad_maxima y 23_distrito_escolar_6
-shap.dependence_plot("actitud_cumple", shap_values_2rs.values, X_test_m2)
-shap.dependence_plot("actitud_consulta", shap_values_2rs.values, X_test_m2)
-shap.dependence_plot("actitud_manifiesta", shap_values_2rs.values, X_test_m2)
-shap.dependence_plot("actitud_puedeOrganizarse", shap_values_2rs.values, X_test_m2)
-shap.dependence_plot("22_turno_Doble", shap_values_2rs.values, X_test_m2)
-
-
+shap.dependence_plot("actitud_PCA_1", shap_values_2rs.values, X_test_m2)
+shap.dependence_plot("actitud_PCA_2", shap_values_2rs.values, X_test_m2)
 
 
 #############################################################################
 ###################   PROCESAMIENTO DE PASES  ###########################
 #############################################################################
 
-pases_p = pases[['anio_pase','documento', 'cue_destino']].copy()
+pases_p = pases[pases["descripcion_solicitud_pase"] == "Aprobado"][['anio_pase', 'documento', 'cue_destino', 'fecha_de_pase']].copy()
 # Agregar la columna 'pase' con valor 1
 pases_p['pase'] = 1
-# Reorganizar el orden de las columnas si es necesario
-pases_p = pases_p[['anio_pase','documento', 'pase', 'cue_destino']]
+#m quedo solo con los pases que se dan antes de la mitad del primer año
+pases_p['fecha_de_pase'] = pd.to_datetime(pases_p['fecha_de_pase'])
+fecha_limite = pd.to_datetime('2023-07-15')
+pases_p = pases_p[pases_p['fecha_de_pase'] <= fecha_limite]
 
 #conteo pases
 pases_p = pases_p.groupby(['documento', 'anio_pase'])['cue_destino'].nunique().reset_index()
@@ -672,8 +824,8 @@ pases_p = pases_p.pivot(index='documento', columns='anio_prefijo')
 
 pases_p.columns = [f"{col[1]}_{col[0]}" for col in pases_p.columns]
 pases_p.reset_index(inplace=True)
-pases_p = pases_p.drop(columns=['22_anio_pase','23_anio_pase','24_anio_pase'])
-pases_p[['22_cant_pases', '23_cant_pases', '24_cant_pases']] = pases_p[['22_cant_pases', '23_cant_pases', '24_cant_pases']].fillna(0)
+pases_p = pases_p.drop(columns=['22_anio_pase','23_anio_pase'])
+pases_p[['22_cant_pases', '23_cant_pases']] = pases_p[['22_cant_pases', '23_cant_pases']].fillna(0)
 
 
 ####################################
@@ -681,7 +833,11 @@ pases_p[['22_cant_pases', '23_cant_pases', '24_cant_pases']] = pases_p[['22_cant
 ####################################
 
 matricula_m3 = matricula_m2.copy()
-matricula_m3 = matricula_m3.merge(pases_p, on="documento", how="inner")
+matricula_m3 = matricula_m3.merge(pases_p, on="documento", how="left")
+
+# Rellenar las columnas específicas con 0 cuando haya valores nulos
+matricula_m3['22_cant_pases'].fillna(0, inplace=True)
+matricula_m3['23_cant_pases'].fillna(0, inplace=True)
 
 
 #elimino VD y armo los conjuntos
@@ -704,7 +860,7 @@ model_m3 = xgb.XGBClassifier(
 model_m3.fit(X_train_m3, y_train_m3)
 y_pred_m3 = model_m3.predict(X_test_m3)
 accuracy_m3 = accuracy_score(y_test_m3, y_pred_m3)
-print(f"AUC sobre el train: {accuracy_m3:.4f}")
+print(f"Accuracy sobre el train: {accuracy_m3:.4f}")
 print(f"AUC ROC sobre train: {roc_auc_score(y_train_m3, model_m3.predict_proba(X_train_m3)[:, 1]):.4f}")
 #prediccion
 predicciones_m3 = model_m3.predict(X_test_m3)
@@ -725,6 +881,7 @@ shap.summary_plot(shap_values_m3, X_test_m3)
 shap.summary_plot(shap_values_m3, X_test_m3, plot_type="bar")
 
 
+print(y_test_m3.sum())
 tn, fp, fn, tp = confusion_matrix(y_test_m3, y_pred_m3).ravel()
 print(f"Verdaderos Positivos (TP): {tp}")
 print(f"Falsos Positivos (FP): {fp}")
@@ -744,14 +901,15 @@ param_dist = {
     'gamma': [0, 1, 3, 5],  # Regularización para evitar sobreajuste
     'max_delta_step': [0, 1, 5],  # Paso máximo para mejorar la estabilidad
     'min_child_weight': [1, 5, 10],  # Peso mínimo de las instancias en una hoja
+    'scale_pos_weight': [1, 2, 3, 5],  # Reincluir este parámetro
     }
 
 model_rs3 = xgb.XGBClassifier(
     objective='binary:logistic',
     eval_metric='auc',
     use_label_encoder=False,
-    random_state=42,
-    scale_pos_weight= len(y_train_m2[y_train_m2 == 0]) / len(y_train_m2[y_train_m2 == 1])  # Incluir scale_pos_weight aquí
+    random_state=42 #,
+    #scale_pos_weight= len(y_train_m3[y_train_m3 == 0]) / len(y_train_m3[y_train_m3 == 1])  # Incluir scale_pos_weight aquí
     )
 
 random_search3 = RandomizedSearchCV(
@@ -769,7 +927,7 @@ random_search3 = RandomizedSearchCV(
 #fiteo del modelo
 random_search3.fit(X_train_m3, y_train_m3)
 print("Mejores parámetros:", random_search3.best_params_)
-print("Mejor AUC del train:", random_search3.best_score_)
+print("AUC ROC Cruzado CV=3:", random_search3.best_score_)
 print(f"AUC ROC sobre train: {roc_auc_score(y_train_m3, random_search3.predict_proba(X_train_m3)[:, 1]):.4f}")
 best_model_3rs = random_search3.best_estimator_
 
@@ -778,19 +936,23 @@ y_pred_m3 = best_model_3rs.predict(X_test_m3)
 
 # Métricas
 print(classification_report(y_test_m3, y_pred_m3))
-print(f"AUC: {roc_auc_score(y_test_m3, best_model_3rs.predict_proba(X_test_m3)[:, 1]):.4f}")
+print(f"ROC AUC TEST: {roc_auc_score(y_test_m3, best_model_3rs.predict_proba(X_test_m3)[:, 1]):.4f}")
+print(f'Accuracy del test: {accuracy_score(y_test_m3, y_pred_m3):.6f}')
+
+#matriz de valores
+print(y_test_m3.sum())
+tn, fp, fn, tp = confusion_matrix(y_test_m3, y_pred_m3).ravel()
+print(f"Verdaderos Positivos (TP): {tp}")
+print(f"Falsos Positivos (FP): {fp}")
+print(f"Verdaderos Negativos (TN): {tn}")
+print(f"Falsos Negativos (FN): {fn}")
+
 
 #analisis grafico
 explainer_3rs = shap.Explainer(best_model_3rs, X_train_m3)
 shap_values_3rs = explainer_3rs(X_test_m3)
 shap.summary_plot(shap_values_3rs, X_test_m3)
 shap.summary_plot(shap_values_3rs, X_test_m3, plot_type="bar")
-
-tn, fp, fn, tp = confusion_matrix(y_test_m3, y_pred_m3).ravel()
-print(f"Verdaderos Positivos (TP): {tp}")
-print(f"Falsos Positivos (FP): {fp}")
-print(f"Verdaderos Negativos (TN): {tn}")
-print(f"Falsos Negativos (FN): {fn}")
 
 
 #############################################################################
@@ -830,6 +992,380 @@ for col in columnas_notas:
     notas[col] = notas[col].astype(str).str.strip().str.lower()  # Limpieza de texto
     notas[col] = notas[col].replace(escala)  # Reemplazo según el diccionario
     notas[col] = notas[col].apply(lambda x: int(x) if isinstance(x, str) and x.isdigit() else x)  # Conversión de números en texto
+
+
+notas['rank'] = notas.groupby('id_alumno')['ciclo_lectivo'].rank(method='dense', ascending=True).astype(int)
+notas_pivot = notas.pivot(index='id_alumno', columns='rank', values=[col for col in notas.columns if col not in ['id_alumno', 'rank']])
+
+# Renombrar columnas con prefijos 1_, 2_, 3_
+notas_pivot.columns = [f"{rank}_{col}" for col, rank in notas_pivot.columns]
+notas_pivot.reset_index(inplace=True)
+
+#elimino las columnas de ciclo lectivo y ademas las de las notas del segundo semestre
+#la idea es dejar solo las del primer semestre para que pueda dar margen de accion
+notas_pivot = notas_pivot[[col for col in notas_pivot.columns if 'ciclo_lectivo' not in col and 'nivel' not in col and not any(pattern in col for pattern in ['3_a_n3', '3_a_n4'])]]
+notas_pivot = notas_pivot.replace(['nan', ''], np.nan)
+notas_pivot.iloc[:, 1:] = notas_pivot.iloc[:, 1:].apply(pd.to_numeric, errors='coerce').astype(float)
+notas_pivot.dtypes
+
+
+## me quedo con las unicas columnas que debería tener el DF al momento de predecir
+## mitad de año del 2023
+sorted_columns = ['id_alumno',
+    '1_a_n1_mate', '1_a_n2_mate', '1_a_n3_mate', '1_a_n4_mate',
+    '1_a_n1_lengua', '1_a_n2_lengua', '1_a_n3_lengua', '1_a_n4_lengua',
+    '2_a_n1_mate', '2_a_n2_mate', '2_a_n1_lengua', '2_a_n2_lengua'
+]
+
+notas_pivot = notas_pivot[sorted_columns]
+
+####################################
+###### MODELO 4 - MATRICULA, PPS, PASES y NOTAS
+####################################
+
+'''
+###############################################################################
+#                             volver a correr desde aca
+###############################################################################
+'''
+
+#tengo notas para todos los etudiantes del df de PPS
+matricula_m3['id_miescuela'].nunique()
+notas_pivot['id_alumno'].nunique()
+len(set(matricula_m3['id_miescuela']) & set(notas_pivot['id_alumno']))
+
+#hago el merge con el df del modelo anterior
+matricula_m4 = matricula_m3.copy()
+matricula_m4 = matricula_m4.merge(notas_pivot, left_on="id_miescuela", right_on="id_alumno", how="left")
+
+#elimino VD y armo los conjuntos
+X_m4 = matricula_m4.drop(columns=['documento', 'id_miescuela', '24_repite'])  # Excluir las columnas que no se usarán
+y_m4 = matricula_m4['24_repite']
+X_train_m4, X_test_m4, y_train_m4, y_test_m4 = train_test_split(X_m4, y_m4, test_size=0.2, random_state=42)
+
+#modelo
+model_m4 = xgb.XGBClassifier(
+    objective='binary:logistic',
+    eval_metric='auc',
+    n_estimators=500,  # Aumentar el número de árboles
+    learning_rate=0.05,  # Reducir la tasa de aprendizaje para evitar overfitting
+    max_depth=6,  # Controla la profundidad de los árboles
+    colsample_bytree=0.8,  # Para usar una fracción de las features en cada árbol
+    subsample=0.8,  # Para usar una fracción de los datos en cada iteración
+    random_state=42
+)
+
+model_m4.fit(X_train_m4, y_train_m4)
+y_pred_m4 = model_m4.predict(X_test_m4)
+accuracy_m4 = accuracy_score(y_test_m4, y_pred_m4)
+print(f"Accuracy sobre el train: {accuracy_m4:.4f}")
+print(f"AUC ROC sobre train: {roc_auc_score(y_train_m4, model_m4.predict_proba(X_train_m4)[:, 1]):.4f}")
+#prediccion
+predicciones_m4 = model_m4.predict(X_test_m4)
+#var imp
+importance_m4 = model_m4.get_booster().get_score(importance_type='weight')
+sorted_importance_m4 = sorted(importance_m4.items(), key=lambda x: x[1], reverse=True)
+#analisis de las predicciones
+print(classification_report(y_test_m4, y_pred_m4))  # Para obtener precisión, recall, f1-score
+print(f"AUC ROC sobre test: {roc_auc_score(y_test_m4, model_m4.predict_proba(X_test_m4)[:, 1]):.4f}")
+print(f'Accuracy del test: {accuracy_score(y_test_m4, y_pred_m4):.6f}')
+
+#matriz de valores
+print(y_test_m4.sum())
+tn, fp, fn, tp = confusion_matrix(y_test_m4, y_pred_m4).ravel()
+print(f"Verdaderos Positivos (TP): {tp}")
+print(f"Falsos Positivos (FP): {fp}")
+print(f"Verdaderos Negativos (TN): {tn}")
+print(f"Falsos Negativos (FN): {fn}")
+
+
+#graficos
+explainer_m4 = shap.Explainer(model_m4, X_train_m4)
+expected_value_m4 = explainer_m4.expected_value
+prob_base_m4 = 1 / (1 + np.exp(-expected_value_m4))
+print('Valor de prediccion de base: ', prob_base_m4)
+shap_values_m4 = explainer_m4(X_test_m4)
+shap.summary_plot(shap_values_m4, X_test_m4)
+shap.summary_plot(shap_values_m4, X_test_m4, plot_type="bar")
+
+
+
+##### MISMO PERO CON UN RANDOMSEARCH
+
+param_dist = {
+    'n_estimators': [100, 300, 500, 700],  # Número de árboles
+    'learning_rate': [0.01, 0.05, 0.1, 0.2],  # Tasa de aprendizaje
+    'max_depth': [4, 6, 8, 10],  # Profundidad máxima de los árboles
+    'colsample_bytree': [0.7, 0.8, 0.9],  # Fracción de características por árbol
+    'subsample': [0.7, 0.8, 0.9],  # Fracción de muestras por árbol
+    'scale_pos_weight': [1, 2, 3, 5],  # Ajuste del peso para la clase minoritaria
+    'gamma': [0, 1, 3, 5],  # Regularización para evitar sobreajuste
+    'max_delta_step': [0, 1, 5],  # Paso máximo para mejorar la estabilidad
+    'min_child_weight': [1, 5, 10],  # Peso mínimo de las instancias en una hoja
+    }
+
+model_rs4 = xgb.XGBClassifier(
+    objective='binary:logistic',
+    eval_metric='auc',
+    use_label_encoder=False,
+    random_state=42 #,
+    #scale_pos_weight= len(y_train_m4[y_train_m4 == 0]) / len(y_train_m4[y_train_m4 == 1])  # Incluir scale_pos_weight aquí
+    )
+
+random_search4 = RandomizedSearchCV(
+    estimator=model_rs4,
+    param_distributions=param_dist,  # Espacio de parámetros para la búsqueda aleatoria
+    n_iter=100,  # Número de combinaciones aleatorias que se probarán
+    scoring='roc_auc',  # Queremos maximizar AUC
+    cv=3,  # Validación cruzada con 3 particiones
+    verbose=1,  # Muestra el progreso
+    random_state=42,
+    n_jobs=-1  # Usamos todos los núcleos de la CPU
+    )
+
+
+#fiteo del modelo
+random_search4.fit(X_train_m4, y_train_m4)
+print("Mejores parámetros:", random_search4.best_params_)
+print("Mejor AUC-ROC cruzado CV=3:", random_search4.best_score_)
+print(f"AUC ROC sobre train: {roc_auc_score(y_train_m4, random_search4.predict_proba(X_train_m4)[:, 1]):.4f}")
+best_model_4rs = random_search4.best_estimator_
+
+# Predicción
+y_pred_m4 = best_model_4rs.predict(X_test_m4)
+
+# Métricas
+print(classification_report(y_test_m4, y_pred_m4))
+print(f"AUC ROC sobre test: {roc_auc_score(y_test_m4, best_model_4rs.predict_proba(X_test_m4)[:, 1]):.4f}")
+print(f'Accuracy del test: {accuracy_score(y_test_m4, y_pred_m4):.6f}')
+
+#matriz de valores
+print(y_test_m4.sum())
+tn, fp, fn, tp = confusion_matrix(y_test_m4, y_pred_m4).ravel()
+print(f"Verdaderos Positivos (TP): {tp}")
+print(f"Falsos Positivos (FP): {fp}")
+print(f"Verdaderos Negativos (TN): {tn}")
+print(f"Falsos Negativos (FN): {fn}")
+
+
+#analisis grafico
+explainer_m4_rs = shap.Explainer(best_model_4rs, X_train_m4)
+expected_value_m4 = explainer_m4.expected_value
+prob_base_m4 = 1 / (1 + np.exp(-expected_value_m4))
+print('Valor de prediccion de base: ', prob_base_m4)
+shap_values_m4 = explainer_m4(X_test_m4)
+shap.summary_plot(shap_values_m4, X_test_m4)
+shap.summary_plot(shap_values_m4, X_test_m4, plot_type="bar")
+
+
+# Visualización de los SHAP values para cada variable
+shap.dependence_plot("2_a_n4_lengua", shap_values_m4.values, X_test_m4)
+shap.dependence_plot("2_a_n4_mate", shap_values_m4.values, X_test_m4)
+
+# Gráfico de distribución de SHAP values para cada variable
+shap.summary_plot(shap_values_m4.values[:, X_test_m4.columns.get_loc('2_a_n4_lengua')], X_test_m4['2_a_n4_lengua'])
+shap.summary_plot(shap_values_m4.values[:, X_test_m4.columns.get_loc('2_a_n4_mate')], X_test_m4['2_a_n4_mate'])
+
+
+
+####################################
+###### MODELO 4 BIS - MATRICULA, PPS, PASES y NOTAS + DESEMPEÑO RELATIVO
+####################################
+
+
+
+
+
+
+#############################################################################
+###################    PROCESAMIENTO DE APOYOS       ########################
+#############################################################################
+
+## TRABAJO CON LA BASE DE APOYOS PARA PODER DEJAR COLS BINARIAS AGRUPADAS X EL CL
+
+apoyos_consolidado = apoyos.groupby(['id_alumno', 'periodo']).agg(
+    ag_apoyo=('ag_apoyo', lambda x: 'Sí' if 'Sí' in x.values else 'No'),
+    ag_apoyo_tipo=('ag_apoyo_tipo', lambda x: list({item for sublist in x.dropna().apply(eval) for item in sublist})),
+).reset_index()
+
+unique_values = set(val for sublist in apoyos_consolidado['ag_apoyo_tipo'] for val in sublist)
+
+for value in unique_values:
+    apoyos_consolidado[f'ag_at_{value}'] = apoyos_consolidado['ag_apoyo_tipo'].apply(lambda x: 1 if value in x else 0)
+
+apoyos_merge = apoyos_consolidado.drop(columns=['ag_apoyo_tipo'])
+
+## ACA VALE LA PENA DEJARLO APERTURADO POR PERIODO O DEJO UNA FILA X ALUMNO
+
+
+#############################################################################
+###################   PROCESAMIENTO DE SERVICIOS  ###########################
+#############################################################################
+
+# quiero ver la distribución de los programas entre la matrícula
+
+servicios_filtrado = servicios[servicios['documento'].isin(matricula_m4['documento'])]
+
+check = (
+    servicios_filtrado
+    .groupby("ciclo_lectivo")
+    .agg({"documento": "nunique", **{col: "sum" for col in servicios.columns if col not in ["ciclo_lectivo", "documento"]}})
+    .reset_index()
+)
+
+#saco aprende programando y transporte porque son 0 en todos los casos
+#saco becas media para 2022 porque no es un programa qeu aplique en ese caso
+
+servicios = servicios.drop(columns=['transporte', 'aprende_programando'])
+servicios_p = servicios.melt(id_vars=['documento', 'id_persona', 'ciclo_lectivo'], 
+                                   var_name='programa', 
+                                   value_name='valor')
+
+#Crear una nueva columna combinando 'ciclo_lectivo' y 'programa'
+servicios_p['columna'] = servicios_p['ciclo_lectivo'].astype(str) + '_' + servicios_p['programa']
+
+#Pivotar para que cada 'documento'/'id_persona' tenga una fila
+servicios_p = servicios_p.pivot_table(index=['documento', 'id_persona'], 
+                                        columns='columna', 
+                                        values='valor', 
+                                        aggfunc='first', 
+                                        fill_value=0)
+
+servicios_p = servicios_p.reset_index()
+#borro porque es un programa de secu y estan en primaria
+servicios_p = servicios_p.drop(columns=['2022_becas_media','id_persona'])
+
+
+####################################
+###### MODELO 6 - MATRICULA, PPS, PASES, NOTAS y SERVICIOS
+####################################
+
+
+matricula_m6 = matricula_m4.copy()
+matricula_m6 = matricula_m6.merge(servicios_p, on='documento', how="left")
+
+#elimino VD y armo los conjuntos
+X_m6 = matricula_m6.drop(columns=['documento', 'id_miescuela', '24_repite'])  # Excluir las columnas que no se usarán
+y_m6 = matricula_m6['24_repite']
+X_train_m6, X_test_m6, y_train_m6, y_test_m6 = train_test_split(X_m6, y_m6, test_size=0.2, random_state=42)
+
+#modelo
+model_m6 = xgb.XGBClassifier(
+    objective='binary:logistic',
+    eval_metric='auc',
+    n_estimators=500,  # Aumentar el número de árboles
+    learning_rate=0.05,  # Reducir la tasa de aprendizaje para evitar overfitting
+    max_depth=6,  # Controla la profundidad de los árboles
+    colsample_bytree=0.8,  # Para usar una fracción de las features en cada árbol
+    subsample=0.8,  # Para usar una fracción de los datos en cada iteración
+    random_state=42
+)
+
+model_m6.fit(X_train_m6, y_train_m6)
+y_pred_m6 = model_m6.predict(X_test_m6)
+accuracy_m6 = accuracy_score(y_test_m6, y_pred_m6)
+print(f"Accuracy sobre el train: {accuracy_m6:.4f}")
+print(f"AUC ROC sobre train: {roc_auc_score(y_train_m6, model_m6.predict_proba(X_train_m6)[:, 1]):.4f}")
+#prediccion
+predicciones_m6 = model_m6.predict(X_test_m6)
+#var imp
+importance_m6 = model_m6.get_booster().get_score(importance_type='weight')
+sorted_importance_m6 = sorted(importance_m6.items(), key=lambda x: x[1], reverse=True)
+#analisis de las predicciones
+print(classification_report(y_test_m6, y_pred_m6))  # Para obtener precisión, recall, f1-score
+print(f"AUC ROC sobre test: {roc_auc_score(y_test_m6, model_m6.predict_proba(X_test_m6)[:, 1]):.4f}")
+print(f'Accuracy del test: {accuracy_score(y_test_m6, y_pred_m6):.6f}')
+
+#matriz de valores
+print(y_test_m6.sum())
+tn, fp, fn, tp = confusion_matrix(y_test_m6, y_pred_m6).ravel()
+print(f"Verdaderos Positivos (TP): {tp}")
+print(f"Falsos Positivos (FP): {fp}")
+print(f"Verdaderos Negativos (TN): {tn}")
+print(f"Falsos Negativos (FN): {fn}")
+
+
+#graficos
+explainer_m6 = shap.Explainer(model_m6, X_train_m6)
+expected_value_m6 = explainer_m6.expected_value
+prob_base_m6 = 1 / (1 + np.exp(-expected_value_m6))
+print('Valor de prediccion de base: ', prob_base_m6)
+shap_values_m6 = explainer_m6(X_test_m6)
+shap.summary_plot(shap_values_m6, X_test_m6)
+shap.summary_plot(shap_values_m6, X_test_m6, plot_type="bar")
+
+'''
+            RETOMAR DESDE ACA
+'''
+
+##### MISMO PERO CON UN RANDOMSEARCH
+
+param_dist = {
+    'n_estimators': [100, 300, 500, 700],  # Número de árboles
+    'learning_rate': [0.01, 0.05, 0.1, 0.2],  # Tasa de aprendizaje
+    'max_depth': [4, 6, 8, 10],  # Profundidad máxima de los árboles
+    'colsample_bytree': [0.7, 0.8, 0.9],  # Fracción de características por árbol
+    'subsample': [0.7, 0.8, 0.9],  # Fracción de muestras por árbol
+    'scale_pos_weight': [1, 2, 3, 5],  # Ajuste del peso para la clase minoritaria
+    'gamma': [0, 1, 3, 5],  # Regularización para evitar sobreajuste
+    'max_delta_step': [0, 1, 5],  # Paso máximo para mejorar la estabilidad
+    'min_child_weight': [1, 5, 10],  # Peso mínimo de las instancias en una hoja
+    }
+
+model_rs6 = xgb.XGBClassifier(
+    objective='binary:logistic',
+    eval_metric='auc',
+    use_label_encoder=False,
+    random_state=42 #,
+    #scale_pos_weight= len(y_train_m4[y_train_m4 == 0]) / len(y_train_m4[y_train_m4 == 1])  # Incluir scale_pos_weight aquí
+    )
+
+random_search6 = RandomizedSearchCV(
+    estimator=model_rs6,
+    param_distributions=param_dist,  # Espacio de parámetros para la búsqueda aleatoria
+    n_iter=100,  # Número de combinaciones aleatorias que se probarán
+    scoring='roc_auc',  # Queremos maximizar AUC
+    cv=3,  # Validación cruzada con 3 particiones
+    verbose=1,  # Muestra el progreso
+    random_state=42,
+    n_jobs=-1  # Usamos todos los núcleos de la CPU
+    )
+
+
+#fiteo del modelo
+random_search6.fit(X_train_m6, y_train_m6)
+print("Mejores parámetros:", random_search6.best_params_)
+print("Mejor AUC-ROC cruzado CV=3:", random_search6.best_score_)
+print(f"AUC ROC sobre train: {roc_auc_score(y_train_m4, random_search4.predict_proba(X_train_m4)[:, 1]):.4f}")
+best_model_6rs = random_search6.best_estimator_
+
+# Predicción
+y_pred_m6 = best_model_6rs.predict(X_test_m6)
+
+# Métricas
+print(classification_report(y_test_m6, y_pred_m6))
+print(f"AUC ROC sobre test: {roc_auc_score(y_test_m6, best_model_6rs.predict_proba(X_test_m6)[:, 1]):.4f}")
+print(f'Accuracy del test: {accuracy_score(y_test_m6, y_pred_m6):.6f}')
+
+#matriz de valores
+print(y_test_m6.sum())
+tn, fp, fn, tp = confusion_matrix(y_test_m6, y_pred_m6).ravel()
+print(f"Verdaderos Positivos (TP): {tp}")
+print(f"Falsos Positivos (FP): {fp}")
+print(f"Verdaderos Negativos (TN): {tn}")
+print(f"Falsos Negativos (FN): {fn}")
+
+
+#analisis grafico
+explainer_m6_rs = shap.Explainer(best_model_6rs, X_train_m6)
+expected_value_m6 = explainer_m6.expected_value
+prob_base_m6 = 1 / (1 + np.exp(-expected_value_m6))
+print('Valor de prediccion de base: ', prob_base_m6)
+shap_values_m6 = explainer_m6(X_test_m6)
+shap.summary_plot(shap_values_m6, X_test_m6)
+shap.summary_plot(shap_values_m6, X_test_m6, plot_type="bar")
+
+
 
 
 #############################################################################
@@ -1050,15 +1586,6 @@ codigo_postal_unicos = dd_m['codigo_postal'].unique()
 ###########################################################################
 '''
 
-
-####################################
-# FUNCION AUXILIAR PARA LOS CASOS DONDE APLIQUE EL ONE HOT ENCODING
-####################################
-
-#devuelve unique-1 cols para cada conjunto de valores de la columna
-def one_hot_encode_columns(df, columns):
-    df_encoded = pd.get_dummies(df, columns=columns, drop_first=True)    
-    return df_encoded
 
 #######################
 ## OHE DIRECTO
